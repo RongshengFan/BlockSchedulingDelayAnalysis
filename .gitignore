@@ -4,7 +4,8 @@ __pycache__/
 *.pyo
 *.pyd
 
-traces/
+traces/*
+!traces/.gitkeep
 
 workloads/build/
 workloads/*.so
