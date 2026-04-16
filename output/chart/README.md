@@ -36,7 +36,7 @@
 对同一 kernel run、同一 SM 上的 block，若当前 block 接替了一个已经结束的 block 槽位，则该 block 的 `Sched` 定义为：
 
 $$
-\mathrm{Sched}_i = \mathrm{start\_clock}_i - \mathrm{end\_clock}_j
+\mathrm{Sched}_i = s_i - e_j
 $$
 
 若不存在满足接替条件的已结束前驱 block，则定义为：
@@ -45,7 +45,7 @@ $$
 \mathrm{Sched}_i = 0
 $$
 
-其中，`Sched` 对应论文中的核心调度指标，用于刻画同一 SM 上 block replacement 过程中产生的等待周期。该指标不是 host 侧 launch offset，也不是硬件直接暴露的 scheduler counter，而是根据 `(start_clock, elapsed, sm)` 重建得到的估计量。
+其中，$s_i$ 表示当前 block 的 `start_clock`，$e_j$ 表示其被替换前驱 block 的 `end_clock`。`Sched` 对应论文中的核心调度指标，用于刻画同一 SM 上 block replacement 过程中产生的等待周期。该指标不是 host 侧 launch offset，也不是硬件直接暴露的 scheduler counter，而是根据 `(start_clock, elapsed, sm)` 重建得到的估计量。
 
 与 `Sched` 相关的主要聚合指标如下：
 
@@ -72,11 +72,11 @@ $$
 核心指标定义如下：
 
 $$
-\mathrm{block\_imbalance\_ratio} = \frac{\mathrm{block}_{\max} - \mathrm{block}_{\min}}{\overline{\mathrm{block}}}
+\mathrm{Imbalance} = \frac{B_{\max} - B_{\min}}{\overline{B}}
 $$
 
 $$
-\mathrm{elapsed\_sum\_cv} = \frac{\sigma(x)}{\mu(x)}
+\mathrm{CV}_{\mathrm{elapsed}} = \frac{\sigma(x)}{\mu(x)}
 $$
 
 $$

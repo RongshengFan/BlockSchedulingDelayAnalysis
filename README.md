@@ -135,12 +135,13 @@ neutrino 安装
 | `elapsed` | block 的执行时长，单位为 cycle | 用于构造 `end_clock`，并作为执行时长对照 |
 | `sm` | block 所在 SM 编号 | 用于按 SM 重建 block replacement 过程 |
 
-由此可以得到：
+由此可以得到中间量：
 
 $$
-end\_clock = start\_clock + elapsed
+e_i = s_i + d_i
 $$
 
+其中，$s_i$ 表示当前 block 的 `start_clock`，$d_i$ 表示其 `elapsed`，$e_i$ 表示对应的 `end_clock`。  
 `end_clock` 不作为单独输出指标，但它是识别 `Sched` 事件的中间量。
 
 ## 核心指标说明
@@ -152,13 +153,13 @@ $$
 对同一 kernel run 内、同一 SM 上按 `start_clock` 排序的 block 序列，维护当前活动 block 集合；若新 block 启动前存在某个已结束 block 满足 `end_clock <= start_clock`，则该 block 的 `Sched` 定义为：
 
 $$
-Sched_i = start\_clock_i - end\_clock_j
+\mathrm{Sched}_i = s_i - e_j
 $$
 
-其中 `j` 为当前可被替换、且结束时间最接近 `start_clock_i` 的 block。若不存在满足条件的前驱 block，则当前 block 不构成有效 `Sched` 事件，记：
+其中 $s_i$ 表示当前 block 的 `start_clock`，$e_j$ 表示被替换前驱 block 的 `end_clock`；`j` 为当前可被替换、且结束时间最接近 `start_clock` 的 block。若不存在满足条件的前驱 block，则当前 block 不构成有效 `Sched` 事件，记：
 
 $$
-Sched_i = 0
+\mathrm{Sched}_i = 0
 $$
 
 这个定义与简单的“相邻 block 时间差”不同，它本质上是对同一 SM 上 resident block 槽位接替过程的重建估计，更接近 Neutrino 论文附录 E 的 block dispatch simulation 思路。
