@@ -23,9 +23,8 @@ REQUIRED_COLUMNS = [
     "batch",
     "block_id",
     "sm",
-    "launch_anchor_ts",
+    "start_clock",
     "start_ts",
-    "launch_offset",
     "elapsed",
     "sched",
 ]
@@ -110,43 +109,25 @@ def check_nulls(df: pd.DataFrame, columns: Iterable[str]) -> list[ValidationIssu
     return issues
 
 
-def check_delay_definition(df: pd.DataFrame) -> list[ValidationIssue]:
+def check_clock_fields(df: pd.DataFrame) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    needed = {"start_ts", "launch_anchor_ts", "launch_offset"}
+    needed = {"start_clock", "start_ts"}
     if not needed.issubset(df.columns):
         return issues
 
-    calc = (df["start_ts"] - df["launch_anchor_ts"]).astype("Int64")
-    mismatch = df[calc != df["launch_offset"]]
-    for idx in mismatch.index.tolist()[:2000]:
-        row = mismatch.loc[idx]
-        issues.append(
-            ValidationIssue(
-                check="launch_offset_definition",
-                severity="error",
-                workload=str(row.get("workload", "")),
-                batch=_safe_int(row.get("batch")),
-                row_index=int(idx),
-                detail=(
-                    "launch_offset mismatch: expected start_ts-launch_anchor_ts="
-                    f"{int(row['start_ts']) - int(row['launch_anchor_ts'])}, got {int(row['launch_offset'])}"
-                ),
-            )
-        )
-
-    negatives = df[df["launch_offset"] < 0]
+    negatives = df[(df["start_clock"] < 0) | (df["start_ts"] < 0)]
     for idx in negatives.index.tolist()[:2000]:
         row = negatives.loc[idx]
         issues.append(
             ValidationIssue(
-                check="negative_launch_offset",
+                check="negative_clock_field",
                 severity="error",
                 workload=str(row.get("workload", "")),
                 batch=_safe_int(row.get("batch")),
                 row_index=int(idx),
                 detail=(
-                    "launch_offset is negative: "
-                    f"launch_anchor_ts={int(row['launch_anchor_ts'])}, start_ts={int(row['start_ts'])}, launch_offset={int(row['launch_offset'])}"
+                    "clock field must be non-negative: "
+                    f"start_clock={int(row['start_clock'])}, start_ts={int(row['start_ts'])}"
                 ),
             )
         )
@@ -193,38 +174,13 @@ def check_sched_non_negative(df: pd.DataFrame) -> list[ValidationIssue]:
     return issues
 
 
-def check_ready_not_after_start(df: pd.DataFrame) -> list[ValidationIssue]:
-    issues: list[ValidationIssue] = []
-    needed = {"workload", "batch", "launch_anchor_ts", "start_ts"}
-    if not needed.issubset(df.columns):
-        return issues
-
-    bad = df[df["launch_anchor_ts"] > df["start_ts"]]
-    for idx in bad.index.tolist()[:2000]:
-        row = bad.loc[idx]
-        issues.append(
-            ValidationIssue(
-                check="launch_anchor_after_start",
-                severity="error",
-                workload=str(row.get("workload", "")),
-                batch=_safe_int(row.get("batch")),
-                row_index=int(idx),
-                detail=(
-                    "launch_anchor_ts must be <= start_ts, got "
-                    f"launch_anchor_ts={int(row['launch_anchor_ts'])}, start_ts={int(row['start_ts'])}"
-                ),
-            )
-        )
-    return issues
-
-
 def check_duplicate_blocks(df: pd.DataFrame) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
-    needed = {"workload", "batch", "block_id", "sm", "launch_anchor_ts", "start_ts", "launch_offset", "elapsed", "sched"}
+    needed = {"workload", "batch", "block_id", "sm", "start_clock", "start_ts", "elapsed", "sched"}
     if not needed.issubset(df.columns):
         return issues
 
-    key_cols = ["workload", "batch", "block_id", "sm", "launch_anchor_ts", "start_ts", "launch_offset", "elapsed", "sched"]
+    key_cols = ["workload", "batch", "block_id", "sm", "start_clock", "start_ts", "elapsed", "sched"]
     dup = df[df.duplicated(key_cols, keep=False)]
     if dup.empty:
         return issues
@@ -302,10 +258,9 @@ def validate_dataframe(df: pd.DataFrame, min_sms: int = 1) -> list[ValidationIss
 
     checks = [
         check_nulls(df, REQUIRED_COLUMNS),
-        check_delay_definition(df),
+        check_clock_fields(df),
         check_elapsed_positive(df),
         check_sched_non_negative(df),
-        check_ready_not_after_start(df),
         check_duplicate_blocks(df),
         check_sm_coverage(df, min_sms=min_sms),
     ]

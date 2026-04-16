@@ -75,6 +75,18 @@ function appendCaption(target, text) {
   target.appendChild(caption);
 }
 
+function appendStatChips(target, items) {
+  const row = document.createElement('div');
+  row.className = 'plot-stats';
+  items.forEach(item => {
+    const chip = document.createElement('div');
+    chip.className = 'plot-stat-chip';
+    chip.innerHTML = `<strong>${item.label}</strong><span>${item.value}</span>`;
+    row.appendChild(chip);
+  });
+  target.appendChild(row);
+}
+
 function uniqueSortedNumbers(values) {
   return [...new Set(values.map(value => Number(value)).filter(value => Number.isFinite(value)))].sort((a, b) => a - b);
 }
@@ -88,6 +100,29 @@ function formatShort(value) {
     return `${(value / 1_000).toFixed(1)}k`;
   }
   return `${Math.round(value * 100) / 100}`;
+}
+
+function strongestCorrelation(items, predicate = null) {
+  const filtered = (items || []).filter(item => {
+    if (!item || !Number.isFinite(Number(item.spearman))) {
+      return false;
+    }
+    return typeof predicate === 'function' ? predicate(item) : true;
+  });
+  if (!filtered.length) {
+    return null;
+  }
+  return [...filtered].sort((a, b) => Math.abs(Number(b.spearman)) - Math.abs(Number(a.spearman)))[0];
+}
+
+function shortCorrelationLabel(item) {
+  const prefix = item?.x === 'sched_event_ratio' ? 'Event ratio' : 'Sched P95';
+  const metricMap = {
+    block_imbalance_ratio: 'imbalance',
+    elapsed_sum_cv: 'elapsed CV',
+    jain_block_fairness: 'Jain fairness',
+  };
+  return `${prefix} / ${metricMap[item?.y] || titleCase(item?.y || '-')}`;
 }
 
 function drawAxes(svg, width, height, margin, yMax, xTicks, yTicks = 4) {
@@ -195,10 +230,65 @@ function renderInsights(report) {
   const low = report?.lowest_risk_workload || {};
   const schedFinding = (report?.sched_findings || []).find(item => Number(item?.batch) !== 8) || (report?.sched_findings || [])[0];
   const loadFinding = (report?.load_findings || []).find(item => Number(item?.batch) !== 8) || (report?.load_findings || [])[0];
+  const pairwise = report?.correlation_summary?.pairwise || [];
+  const bestSched = strongestCorrelation(pairwise, item => item.x === 'sched_p95_cycles');
+  const bestEvent = strongestCorrelation(pairwise, item => item.x === 'sched_event_ratio');
   setText('topRiskSummary', top.workload ? `最高风险：${top.workload}（score=${Number(top.overall_risk_score ?? 0).toFixed(2)}）` : '-');
   setText('lowRiskSummary', low.workload ? `最低风险：${low.workload}（score=${Number(low.overall_risk_score ?? 0).toFixed(2)}）` : '-');
   setText('schedInsight', schedFinding?.detail || '-');
   setText('loadInsight', loadFinding?.detail || '-');
+  setText(
+    'correlationInsight',
+    bestSched && bestEvent
+      ? `Sched P95 侧最强：${bestSched.interpretation}；事件覆盖侧最强：${bestEvent.interpretation}。`
+      : bestSched ? `${shortCorrelationLabel(bestSched)}：Spearman=${Number(bestSched.spearman).toFixed(3)}` : bestEvent ? `${shortCorrelationLabel(bestEvent)}：Spearman=${Number(bestEvent.spearman).toFixed(3)}` : '-'
+  );
+}
+
+function renderStoryline(summary = state.summary, report = state.report) {
+  const container = document.getElementById('storylineGrid');
+  container.innerHTML = '';
+  const sched = summary?.sched || [];
+  const load = summary?.load || [];
+  const peakSched = [...sched].sort((a, b) => (Number(b.sched_p95_cycles) || 0) - (Number(a.sched_p95_cycles) || 0))[0];
+  const peakLoad = [...load].sort((a, b) => (Number(b.block_imbalance_ratio) || 0) - (Number(a.block_imbalance_ratio) || 0))[0];
+  const top = report?.top_risk_workload || {};
+  const low = report?.lowest_risk_workload || {};
+  const pairwise = report?.correlation_summary?.pairwise || [];
+  const bestPair = strongestCorrelation(pairwise);
+  const cards = [
+    {
+      title: '总体概览',
+      text: top.workload
+        ? `${top.workload} 当前综合风险最高，${low.workload || '-'} 相对更稳，适合作为 4.2 节总览的开场。`
+        : '先看风险排序与结构化结论，快速定位总体最值得分析的 workload。',
+    },
+    {
+      title: 'Sched 主线',
+      text: peakSched
+        ? `${peakSched.workload} 在 batch ${peakSched.batch} 上给出当前筛选范围内最高的 Sched P95，可继续结合事件覆盖率看调度波动。`
+        : '优先使用 Sched P95 与 Sched Event Ratio 观察批次变化带来的调度波动。',
+    },
+    {
+      title: 'Load 主线',
+      text: peakLoad
+        ? `${peakLoad.workload} 在 batch ${peakLoad.batch} 上出现最高 load imbalance，再配合 Jain fairness 和 SM heatmap 做局部解释。`
+        : '结合 imbalance、elapsed CV、Jain fairness 和热力图分析负载分布是否均衡。',
+    },
+    {
+      title: '关联主线',
+      text: bestPair
+        ? `${shortCorrelationLabel(bestPair)} 的 Spearman=${Number(bestPair.spearman).toFixed(3)}，可作为 4.4 节关联分析的切入点。`
+        : '先看关联强度图，再去静态 correlation 图组里做更细的读图分析。',
+    },
+  ];
+
+  cards.forEach(card => {
+    const item = document.createElement('article');
+    item.className = 'story-card';
+    item.innerHTML = `<strong>${card.title}</strong><p>${card.text}</p>`;
+    container.appendChild(item);
+  });
 }
 
 function renderCards(summary) {
@@ -207,12 +297,12 @@ function renderCards(summary) {
   const load = summary.load || [];
   const validation = summary.validation || {};
   const topRisk = ranking[0];
-  const peakSched = [...sched].sort((a, b) => (b.dispatch_gap_p95_cycles || 0) - (a.dispatch_gap_p95_cycles || 0))[0];
+  const peakSched = [...sched].sort((a, b) => (b.sched_p95_cycles || 0) - (a.sched_p95_cycles || 0))[0];
   const peakLoad = [...load].sort((a, b) => (b.block_imbalance_ratio || 0) - (a.block_imbalance_ratio || 0))[0];
 
   setText('topRiskWorkload', topRisk?.workload || '-');
   setText('topRiskScore', topRisk ? `score ${Number(topRisk.overall_risk_score).toFixed(2)}` : '-');
-  setText('peakSchedP95', peakSched ? Number(peakSched.dispatch_gap_p95_cycles).toFixed(2) : '-');
+  setText('peakSchedP95', peakSched ? Number(peakSched.sched_p95_cycles).toFixed(2) : '-');
   setText('peakSchedWorkload', peakSched ? `${peakSched.workload} / batch ${peakSched.batch}` : '-');
   setText('peakImbalance', peakLoad ? Number(peakLoad.block_imbalance_ratio).toFixed(4) : '-');
   setText('peakImbalanceWorkload', peakLoad ? `${peakLoad.workload} / batch ${peakLoad.batch}` : '-');
@@ -410,6 +500,101 @@ function renderRankingChart(records) {
   target.appendChild(container);
 }
 
+function renderCorrelationChart(report) {
+  const records = report?.correlation_summary?.pairwise || [];
+  if (!records.length) {
+    renderEmptyState('correlationChart', '没有关联摘要数据');
+    return;
+  }
+  const target = clearPlot('correlationChart');
+  const container = document.createElement('div');
+  container.className = 'plot-shell';
+  const svg = createSvg();
+  const width = 760;
+  const height = 360;
+  const margin = { top: 20, right: 32, bottom: 40, left: 196 };
+  const plotWidth = width - margin.left - margin.right;
+  const rowHeight = 40;
+  const zeroX = margin.left + plotWidth / 2;
+  const xScale = value => zeroX + Number(value) * (plotWidth / 2);
+
+  [-1, -0.5, 0, 0.5, 1].forEach(tickValue => {
+    const x = xScale(tickValue);
+    svg.appendChild(
+      svgEl('line', {
+        x1: x,
+        y1: margin.top,
+        x2: x,
+        y2: height - margin.bottom,
+        stroke: tickValue === 0 ? 'rgba(15,23,42,0.28)' : 'rgba(148,163,184,0.22)',
+        'stroke-width': tickValue === 0 ? 1.4 : 1,
+      })
+    );
+    const label = svgEl('text', {
+      x,
+      y: height - 12,
+      'text-anchor': 'middle',
+      'font-size': 11,
+      fill: '#64748b',
+    });
+    label.textContent = `${tickValue}`;
+    svg.appendChild(label);
+  });
+
+  records.forEach((item, index) => {
+    const spearman = Number(item.spearman) || 0;
+    const y = margin.top + index * (rowHeight + 10) + 12;
+    const barY = y - 11;
+    const barHeight = 22;
+    const xStart = spearman >= 0 ? zeroX : xScale(spearman);
+    const barWidth = Math.abs(xScale(spearman) - zeroX);
+    const color = item.x === 'sched_event_ratio' ? '#0f9f78' : '#2563eb';
+
+    svg.appendChild(
+      svgEl('rect', {
+        x: xStart,
+        y: barY,
+        width: Math.max(barWidth, 1.5),
+        height: barHeight,
+        rx: 8,
+        fill: color,
+        opacity: spearman >= 0 ? 0.78 : 0.56,
+      })
+    );
+
+    const name = svgEl('text', {
+      x: margin.left - 10,
+      y: y + 4,
+      'text-anchor': 'end',
+      'font-size': 12,
+      fill: '#1e2430',
+    });
+    name.textContent = shortCorrelationLabel(item);
+    svg.appendChild(name);
+
+    const value = svgEl('text', {
+      x: spearman >= 0 ? xScale(spearman) + 8 : xScale(spearman) - 8,
+      y: y + 4,
+      'text-anchor': spearman >= 0 ? 'start' : 'end',
+      'font-size': 11,
+      fill: '#475569',
+    });
+    value.textContent = `${spearman >= 0 ? '+' : ''}${spearman.toFixed(3)}`;
+    svg.appendChild(value);
+  });
+
+  const schedLabel = svgEl('text', { x: margin.left, y: 18, 'font-size': 11, fill: '#2563eb' });
+  schedLabel.textContent = 'blue: Sched P95';
+  svg.appendChild(schedLabel);
+  const eventLabel = svgEl('text', { x: margin.left + 110, y: 18, 'font-size': 11, fill: '#0f9f78' });
+  eventLabel.textContent = 'green: Sched Event Ratio';
+  svg.appendChild(eventLabel);
+
+  container.appendChild(svg);
+  appendCaption(container, 'Spearman coefficient from the structured report, used to judge the monotonic association between sched and load metrics.');
+  target.appendChild(container);
+}
+
 function renderScatterChart(targetId, records, xField, yField, sizeField, title) {
   if (!records.length) {
     renderEmptyState(targetId, '没有散点数据');
@@ -447,19 +632,17 @@ function renderScatterChart(targetId, records, xField, yField, sizeField, title)
   target.appendChild(container);
 }
 
-function renderDistribution(records, metric) {
-  if (!records.length) {
+function renderDistribution(payload, metric) {
+  const bins = payload?.bins || [];
+  const summary = payload?.summary || {};
+  if (!summary.total_count) {
     renderEmptyState('distributionChart', '当前筛选条件下没有分布数据');
     return;
   }
-  const groups = new Map();
-  records.forEach(row => {
-    const key = `${row.workload}-b${row.batch}`;
-    if (!groups.has(key)) {
-      groups.set(key, []);
-    }
-    groups.get(key).push(row.value);
-  });
+  if (!summary.nonzero_count || !bins.length) {
+    renderEmptyState('distributionChart', '当前筛选范围内没有非零 Sched 事件');
+    return;
+  }
   const target = clearPlot('distributionChart');
   const container = document.createElement('div');
   container.className = 'plot-shell';
@@ -469,45 +652,73 @@ function renderDistribution(records, metric) {
   const margin = { top: 20, right: 24, bottom: 60, left: 64 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const entries = Array.from(groups.entries()).slice(0, 8);
-  const values = entries.flatMap(([, groupValues]) => groupValues.map(Number).filter(Number.isFinite));
-  const yMax = Math.max(...values, 1);
-  drawAxes(svg, width, height, margin, yMax, entries.map(([,], index) => ({ x: margin.left + ((index + 0.5) / entries.length) * plotWidth, label: index + 1 })));
-
-  const quantile = (array, q) => {
-    const sorted = [...array].sort((a, b) => a - b);
-    if (!sorted.length) {
-      return 0;
-    }
-    const pos = (sorted.length - 1) * q;
-    const base = Math.floor(pos);
-    const rest = pos - base;
-    return sorted[base + 1] !== undefined ? sorted[base] + rest * (sorted[base + 1] - sorted[base]) : sorted[base];
-  };
+  const yMax = Math.max(...bins.map(item => Number(item.count) || 0), 1);
+  const xTicks = bins
+    .filter((_, index) => index === 0 || index === bins.length - 1 || index === Math.floor((bins.length - 1) / 2))
+    .map(item => ({
+      x: margin.left + ((Math.log10(item.left) - Math.log10(bins[0].left)) / Math.max(Math.log10(bins[bins.length - 1].right) - Math.log10(bins[0].left), 1e-9)) * plotWidth,
+      label: formatShort(item.left),
+    }));
+  drawAxes(svg, width, height, margin, yMax, xTicks);
   const yScale = value => margin.top + plotHeight - (value / yMax) * plotHeight;
+  const logMin = Math.log10(bins[0].left);
+  const logMax = Math.log10(bins[bins.length - 1].right);
+  const xScale = value => margin.left + ((Math.log10(value) - logMin) / Math.max(logMax - logMin, 1e-9)) * plotWidth;
 
-  entries.forEach(([key, groupValues], index) => {
-    const data = groupValues.map(Number).filter(Number.isFinite);
-    const q1 = quantile(data, 0.25);
-    const q2 = quantile(data, 0.50);
-    const q3 = quantile(data, 0.75);
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const center = margin.left + ((index + 0.5) / entries.length) * plotWidth;
-    const boxWidth = Math.min(42, plotWidth / entries.length / 1.8);
-    const color = CHART_COLORS[index % CHART_COLORS.length];
+  bins.forEach((bin, index) => {
+    const x1 = xScale(Math.max(Number(bin.left), 1));
+    const x2 = xScale(Math.max(Number(bin.right), Number(bin.left) + 1e-6));
+    const barWidth = Math.max(3, x2 - x1 - 1.5);
+    const y = yScale(Number(bin.count) || 0);
+    svg.appendChild(svgEl('rect', {
+      x: x1,
+      y,
+      width: barWidth,
+      height: margin.top + plotHeight - y,
+      rx: 4,
+      fill: index % 2 === 0 ? '#2563eb' : '#4f86ff',
+      opacity: 0.82,
+    }));
+  });
 
-    svg.appendChild(svgEl('line', { x1: center, y1: yScale(min), x2: center, y2: yScale(max), stroke: color, 'stroke-width': 1.4 }));
-    svg.appendChild(svgEl('rect', { x: center - boxWidth / 2, y: yScale(q3), width: boxWidth, height: Math.max(2, yScale(q1) - yScale(q3)), fill: color, opacity: 0.3, stroke: color, 'stroke-width': 1.2 }));
-    svg.appendChild(svgEl('line', { x1: center - boxWidth / 2, y1: yScale(q2), x2: center + boxWidth / 2, y2: yScale(q2), stroke: color, 'stroke-width': 1.6 }));
-
-    const label = svgEl('text', { x: center, y: height - 18, 'text-anchor': 'middle', 'font-size': 10, fill: '#5b6474' });
-    label.textContent = key;
+  [
+    { value: Number(summary.q50) || 0, color: '#0f9f78', label: 'Q50' },
+    { value: Number(summary.q95) || 0, color: '#f59e0b', label: 'Q95' },
+    { value: Number(summary.q99) || 0, color: '#ef4444', label: 'Q99' },
+  ].forEach(marker => {
+    if (!marker.value || marker.value <= 0) {
+      return;
+    }
+    const x = xScale(marker.value);
+    svg.appendChild(svgEl('line', {
+      x1: x,
+      y1: margin.top,
+      x2: x,
+      y2: margin.top + plotHeight,
+      stroke: marker.color,
+      'stroke-width': 1.5,
+      'stroke-dasharray': '4 4',
+    }));
+    const label = svgEl('text', {
+      x: x + 4,
+      y: margin.top + 14,
+      'font-size': 11,
+      fill: marker.color,
+    });
+    label.textContent = marker.label;
     svg.appendChild(label);
   });
 
   container.appendChild(svg);
-  appendCaption(container, `${metricLabel(metric)} distribution`);
+  drawXAxisLabel(svg, width, height, 'Sched cycles (non-zero, log scale)');
+  drawYAxisLabel(svg, height, 'count');
+  appendCaption(container, `${metricLabel(metric)} histogram over non-zero events, with zero-event share kept as a separate summary so the main shape is still readable.`);
+  appendStatChips(container, [
+    { label: 'Total blocks', value: formatShort(Number(summary.total_count) || 0) },
+    { label: 'Non-zero Sched', value: formatShort(Number(summary.nonzero_count) || 0) },
+    { label: 'Zero ratio', value: `${((Number(summary.zero_ratio) || 0) * 100).toFixed(1)}%` },
+    { label: 'Q95', value: formatShort(Number(summary.q95) || 0) },
+  ]);
   target.appendChild(container);
 }
 
@@ -586,7 +797,7 @@ function renderTable(records) {
   if (!records.length) {
     return;
   }
-  const columns = ['workload', 'batch', 'dispatch_gap_p95_cycles', 'sched_event_ratio', 'sched_cycles_per_sm_mean', 'block_imbalance_ratio', 'elapsed_sum_cv', 'jain_block_fairness'];
+  const columns = ['workload', 'batch', 'sched_p95_cycles', 'sched_event_ratio', 'sched_cycles_per_sm_mean', 'block_imbalance_ratio', 'elapsed_sum_cv', 'jain_block_fairness'];
   const headerRow = document.createElement('tr');
   columns.forEach(column => {
     const th = document.createElement('th');
@@ -601,7 +812,7 @@ function renderTable(records) {
       const td = document.createElement('td');
       let value = row[column];
       if (column === 'sched_event_ratio') {
-        const numerator = Number(row.dispatch_gap_event_count) || 0;
+        const numerator = Number(row.sched_event_count) || 0;
         const denominator = Number(row.block_count_total) || 0;
         value = denominator > 0 ? numerator / denominator : 0;
       }
@@ -622,13 +833,15 @@ function renderReportCards(report) {
   const top = report?.top_risk_workload || {};
   const low = report?.lowest_risk_workload || {};
   const rankingMethod = report?.ranking_method || {};
-  const pairwise = report?.correlation_summary?.pairwise || [];
+  const pairwise = [...(report?.correlation_summary?.pairwise || [])].sort(
+    (a, b) => Math.abs(Number(b?.spearman) || 0) - Math.abs(Number(a?.spearman) || 0)
+  );
   const corrPreview = pairwise
     .slice(0, 2)
     .map(item => {
       const spearman = item?.spearman;
       const value = Number.isFinite(spearman) ? spearman.toFixed(3) : 'NA';
-      return `${item.label}：Spearman=${value}`;
+      return `${shortCorrelationLabel(item)}：Spearman=${value}`;
     })
     .join('；');
   const cards = [
@@ -703,7 +916,11 @@ function renderGallery(groups) {
 
 async function loadReport() {
   if (state.report) {
+    renderReportCards(state.report);
     renderReport(state.report);
+    renderInsights(state.report);
+    renderCorrelationChart(state.report);
+    renderStoryline(state.summary, state.report);
     return;
   }
   document.getElementById('reportView').textContent = '正在加载结构化结论...';
@@ -712,6 +929,8 @@ async function loadReport() {
   renderReportCards(state.report);
   renderReport(state.report);
   renderInsights(state.report);
+  renderCorrelationChart(state.report);
+  renderStoryline(state.summary, state.report);
 }
 
 async function loadGallery() {
@@ -746,9 +965,9 @@ async function refresh() {
 
   renderStatus(summary.validation || {});
   renderCards(summary);
-  renderLineChart('schedChart', summary.sched || [], 'dispatch_gap_p95_cycles', 'Sched Gap P95 by Batch');
+  renderLineChart('schedChart', summary.sched || [], 'sched_p95_cycles', 'Sched P95 by Batch');
   const schedEventRatio = (summary.sched || []).map(row => {
-    const numerator = Number(row.dispatch_gap_event_count) || 0;
+    const numerator = Number(row.sched_event_count) || 0;
     const denominator = Number(row.block_count_total) || 0;
     return { ...row, sched_event_ratio: denominator > 0 ? numerator / denominator : 0 };
   });
@@ -756,10 +975,15 @@ async function refresh() {
   renderLineChart('loadChart', summary.load || [], 'block_imbalance_ratio', 'Load Imbalance by Batch');
   renderGroupedBarChart('fairnessChart', summary.load || [], 'jain_block_fairness', 'Jain Fairness by Batch');
   renderRankingChart(summary.ranking || []);
-  renderScatterChart('riskScatterChart', summary.ranking || [], 'core_sched_p95_mean', 'imbalance_mean', 'elapsed_cv_mean', 'Risk scatter by workload');
-  renderDistribution(distribution.records || [], metric);
+  if (state.report) {
+    renderCorrelationChart(state.report);
+  } else {
+    renderEmptyState('correlationChart', '正在加载关联摘要...');
+  }
+  renderDistribution(distribution, metric);
   renderHeatmap(heatmap.records || []);
   renderTable(mergeSummary(summary));
+  renderStoryline(summary, state.report);
   void loadReport();
   void loadGallery();
 }

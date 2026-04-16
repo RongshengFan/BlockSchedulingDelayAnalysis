@@ -8,7 +8,7 @@ Output layout:
     output/data/<workload>.csv
 
 Columns are normalized to thesis-safe names:
-    workload,batch,block_id,sm,launch_anchor_ts,start_ts,launch_offset,elapsed,sched
+    workload,batch,block_id,sm,start_clock,start_ts,elapsed,sched
 """
 
 from __future__ import annotations
@@ -133,8 +133,6 @@ def collect_bins(patterns: list[str]) -> list[str]:
 def build_block_table(df: pd.DataFrame) -> pd.DataFrame:
     group_cols = ["workload", "batch", "_trace_id", "_kernel_run_id"]
     out = attach_sched_per_block(df)
-    out["launch_anchor_ts"] = out.groupby(group_cols)["start_ts"].transform("min")
-    out["launch_offset"] = out["start_ts"] - out["launch_anchor_ts"]
 
     out = out[
         [
@@ -142,9 +140,8 @@ def build_block_table(df: pd.DataFrame) -> pd.DataFrame:
             "batch",
             "block_id",
             "sm",
-            "launch_anchor_ts",
+            "start_clock",
             "start_ts",
-            "launch_offset",
             "elapsed",
             "sched",
         ]

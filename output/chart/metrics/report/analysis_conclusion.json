@@ -23,18 +23,17 @@
     "passed": true
   },
   "metric_definitions": {
-    "sched": "sched denotes the Neutrino-style scheduling gap on the same SM: the actual start time of a newly dispatched block minus the actual end time of the previous block observed on that SM.",
-    "launch_offset": "launch_offset is a relative start offset measured from the earliest block start timestamp in the same traced kernel run. It is not the true ready-to-run wait time.",
-    "core_sched_metric": "Core scheduling summary is based on Neutrino-style dispatch-gap statistics. For blocks observed on the same SM, the sched gap is defined as the actual start time of the next block minus the actual end time of the previous block."
+    "sched": "Sched is the core metric reconstructed from (start_clock, elapsed, sm). Within the same SM, if a block replaces the most recent finished block slot, its Sched value is start_clock_i - end_clock_j; otherwise Sched is 0.",
+    "sched_metric": "Core Sched summary follows the Neutrino-style same-SM block replacement reconstruction. For a block observed on an SM, Sched is computed from the block start clock and the end clock of the most recent finished block that it replaces on that SM."
   },
   "ranking_method": {
     "method": "equal_weight_rank_sum",
     "aggregation_level": "per-workload mean over retained batches",
-    "core_sched_metric": "dispatch_gap_p95_cycles",
+    "sched_metric": "sched_p95_cycles",
     "dimensions": [
       {
         "name": "sched",
-        "column": "core_sched_p95_mean",
+        "column": "sched_p95_mean",
         "direction": "higher_worse"
       },
       {
@@ -61,12 +60,12 @@
     "note": "This score is a comparative workload summary for analysis/dashboard use, not a physical hardware metric."
   },
   "correlation_summary": {
-    "core_metric": "dispatch_gap_p95_cycles",
+    "core_metric": "sched_p95_cycles",
     "merged_rows": 20,
     "pairwise": [
       {
-        "label": "dispatch_gap_p95_cycles vs block_imbalance_ratio",
-        "x": "dispatch_gap_p95_cycles",
+        "label": "Sched P95 vs block_imbalance_ratio",
+        "x": "sched_p95_cycles",
         "y": "block_imbalance_ratio",
         "count": 20,
         "pearson": -0.08828982119870292,
@@ -74,17 +73,17 @@
         "interpretation": "very weak negative correlation"
       },
       {
-        "label": "dispatch_gap_p95_cycles vs elapsed_sum_cv",
-        "x": "dispatch_gap_p95_cycles",
+        "label": "Sched P95 vs elapsed_sum_cv",
+        "x": "sched_p95_cycles",
         "y": "elapsed_sum_cv",
         "count": 20,
-        "pearson": -0.14133655517828073,
+        "pearson": -0.14133655517828111,
         "spearman": -0.03609022556390977,
         "interpretation": "very weak negative correlation"
       },
       {
-        "label": "dispatch_gap_p95_cycles vs jain_block_fairness",
-        "x": "dispatch_gap_p95_cycles",
+        "label": "Sched P95 vs jain_block_fairness",
+        "x": "sched_p95_cycles",
         "y": "jain_block_fairness",
         "count": 20,
         "pearson": 0.09796594536291435,
@@ -96,7 +95,7 @@
         "x": "sched_event_ratio",
         "y": "block_imbalance_ratio",
         "count": 20,
-        "pearson": -0.8096342222176327,
+        "pearson": -0.8096342222176325,
         "spearman": -0.7109908924595758,
         "interpretation": "strong negative correlation"
       },
@@ -105,7 +104,7 @@
         "x": "sched_event_ratio",
         "y": "elapsed_sum_cv",
         "count": 20,
-        "pearson": -0.8040157459549436,
+        "pearson": -0.8040157459549432,
         "spearman": -0.7945689507106932,
         "interpretation": "strong negative correlation"
       },
@@ -114,7 +113,7 @@
         "x": "sched_event_ratio",
         "y": "jain_block_fairness",
         "count": 20,
-        "pearson": 0.7652749239787482,
+        "pearson": 0.7652749239787481,
         "spearman": 0.7137600224725599,
         "interpretation": "strong positive correlation"
       }
@@ -126,110 +125,54 @@
       "workload": "mixed",
       "batch": 16,
       "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
+      "metric": "sched_p95_cycles",
       "value": 13378.2,
-      "detail": "batch=16 highest dispatch gap p95 workload is mixed (p95=13378.2000)"
+      "detail": "batch=16 highest Sched P95 workload is mixed (p95=13378.2000)"
     },
     {
       "category": "sched",
       "workload": "mixed",
       "batch": 32,
       "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
+      "metric": "sched_p95_cycles",
       "value": 28343.149999999983,
-      "detail": "batch=32 highest dispatch gap p95 workload is mixed (p95=28343.1500)"
+      "detail": "batch=32 highest Sched P95 workload is mixed (p95=28343.1500)"
     },
     {
       "category": "sched",
       "workload": "mixed",
       "batch": 64,
       "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
+      "metric": "sched_p95_cycles",
       "value": 20722.249999999993,
-      "detail": "batch=64 highest dispatch gap p95 workload is mixed (p95=20722.2500)"
+      "detail": "batch=64 highest Sched P95 workload is mixed (p95=20722.2500)"
     },
     {
       "category": "sched",
       "workload": "mixed",
       "batch": 128,
       "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
+      "metric": "sched_p95_cycles",
       "value": 16106.0,
-      "detail": "batch=128 highest dispatch gap p95 workload is mixed (p95=16106.0000)"
+      "detail": "batch=128 highest Sched P95 workload is mixed (p95=16106.0000)"
     },
     {
       "category": "sched",
       "workload": "mixed",
       "batch": null,
       "severity": "high",
-      "metric": "core_sched_p95_mean",
+      "metric": "sched_p95_mean",
       "value": 19637.399999999994,
-      "detail": "overall highest mean dispatch-gap p95 scheduling delay workload is mixed (value=19637.4000)"
+      "detail": "overall highest mean Sched P95 workload is mixed (value=19637.4000)"
     },
     {
       "category": "sched",
       "workload": "sparse",
       "batch": null,
       "severity": "info",
-      "metric": "core_sched_p95_mean",
+      "metric": "sched_p95_mean",
       "value": 1035.5499999999993,
-      "detail": "overall lowest mean dispatch-gap p95 scheduling delay workload is sparse (value=1035.5500)"
-    }
-  ],
-  "delay_findings": [
-    {
-      "category": "sched",
-      "workload": "mixed",
-      "batch": 16,
-      "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
-      "value": 13378.2,
-      "detail": "batch=16 highest dispatch gap p95 workload is mixed (p95=13378.2000)"
-    },
-    {
-      "category": "sched",
-      "workload": "mixed",
-      "batch": 32,
-      "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
-      "value": 28343.149999999983,
-      "detail": "batch=32 highest dispatch gap p95 workload is mixed (p95=28343.1500)"
-    },
-    {
-      "category": "sched",
-      "workload": "mixed",
-      "batch": 64,
-      "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
-      "value": 20722.249999999993,
-      "detail": "batch=64 highest dispatch gap p95 workload is mixed (p95=20722.2500)"
-    },
-    {
-      "category": "sched",
-      "workload": "mixed",
-      "batch": 128,
-      "severity": "high",
-      "metric": "dispatch_gap_p95_cycles",
-      "value": 16106.0,
-      "detail": "batch=128 highest dispatch gap p95 workload is mixed (p95=16106.0000)"
-    },
-    {
-      "category": "sched",
-      "workload": "mixed",
-      "batch": null,
-      "severity": "high",
-      "metric": "core_sched_p95_mean",
-      "value": 19637.399999999994,
-      "detail": "overall highest mean dispatch-gap p95 scheduling delay workload is mixed (value=19637.4000)"
-    },
-    {
-      "category": "sched",
-      "workload": "sparse",
-      "batch": null,
-      "severity": "info",
-      "metric": "core_sched_p95_mean",
-      "value": 1035.5499999999993,
-      "detail": "overall lowest mean dispatch-gap p95 scheduling delay workload is sparse (value=1035.5500)"
+      "detail": "overall lowest mean Sched P95 workload is sparse (value=1035.5500)"
     }
   ],
   "load_findings": [
@@ -299,7 +242,7 @@
   ],
   "top_risk_workload": {
     "workload": "memory",
-    "core_sched_p95_mean": 2041.099999999998,
+    "sched_p95_mean": 2041.099999999998,
     "imbalance_mean": 0.24072265625,
     "elapsed_cv_mean": 0.05034737824806763,
     "jain_mean": 0.9965134200528837,
@@ -307,13 +250,11 @@
     "rank_imbalance": 5.0,
     "rank_cv": 5.0,
     "rank_fairness_bad": 4.0,
-    "overall_risk_score": 17.0,
-    "delay_p95_mean": 2041.099999999998,
-    "rank_delay": 3.0
+    "overall_risk_score": 17.0
   },
   "lowest_risk_workload": {
     "workload": "vgg16",
-    "core_sched_p95_mean": 7431.399999999999,
+    "sched_p95_mean": 7431.399999999999,
     "imbalance_mean": 0.07916666666666662,
     "elapsed_cv_mean": 0.023978045965988827,
     "jain_mean": 0.9994472183566542,
@@ -321,9 +262,7 @@
     "rank_imbalance": 1.0,
     "rank_cv": 2.0,
     "rank_fairness_bad": 1.0,
-    "overall_risk_score": 8.0,
-    "delay_p95_mean": 7431.399999999999,
-    "rank_delay": 4.0
+    "overall_risk_score": 8.0
   },
   "n_workloads": 5
 }

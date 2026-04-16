@@ -28,8 +28,8 @@ MG = _load_module(ROOT / "analysis" / "metrics_guard.py", "metrics_guard_test_mo
 def _delay() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"workload": "a", "batch": 8, "sched_cycles_per_sm_mean": 1.0, "dispatch_gap_p95_cycles": 2.0, "dispatch_gap_max_cycles": 3.0},
-            {"workload": "b", "batch": 8, "sched_cycles_per_sm_mean": 2.0, "dispatch_gap_p95_cycles": 3.0, "dispatch_gap_max_cycles": 4.0},
+            {"workload": "a", "batch": 8, "sched_cycles_per_sm_mean": 1.0, "sched_p95_cycles": 2.0, "sched_max_cycles": 3.0},
+            {"workload": "b", "batch": 8, "sched_cycles_per_sm_mean": 2.0, "sched_p95_cycles": 3.0, "sched_max_cycles": 4.0},
         ]
     )
 
@@ -46,8 +46,8 @@ def _load() -> pd.DataFrame:
 def _rank() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"workload": "b", "overall_risk_score": 6.0, "rank_delay": 2.0, "rank_imbalance": 2.0, "rank_cv": 1.0, "rank_fairness_bad": 1.0},
-            {"workload": "a", "overall_risk_score": 4.0, "rank_delay": 1.0, "rank_imbalance": 1.0, "rank_cv": 2.0, "rank_fairness_bad": 0.0},
+            {"workload": "b", "overall_risk_score": 6.0, "rank_sched": 2.0, "rank_imbalance": 2.0, "rank_cv": 1.0, "rank_fairness_bad": 1.0},
+            {"workload": "a", "overall_risk_score": 5.0, "rank_sched": 1.0, "rank_imbalance": 1.0, "rank_cv": 2.0, "rank_fairness_bad": 1.0},
         ]
     )
 
@@ -81,7 +81,7 @@ class GuardCheckTests(unittest.TestCase):
     def test_metric_ranges_negative_and_jain_out_of_range(self):
         d = _delay().copy()
         l = _load().copy()
-        d.loc[0, "dispatch_gap_p95_cycles"] = -1
+        d.loc[0, "sched_p95_cycles"] = -1
         l.loc[0, "jain_block_fairness"] = 1.2
         l.loc[1, "elapsed_sum_cv"] = -0.1
         issues = MG.check_metric_ranges(d, l)
@@ -93,6 +93,7 @@ class GuardCheckTests(unittest.TestCase):
     def test_rank_consistency_detects_problems(self):
         r = _rank().copy()
         r.loc[0, "overall_risk_score"] = 999
+        r.loc[1, "rank_fairness_bad"] = 0
         issues = MG.check_rank_consistency(r)
         checks = {i.check for i in issues}
         self.assertIn("rank_consistency", checks)

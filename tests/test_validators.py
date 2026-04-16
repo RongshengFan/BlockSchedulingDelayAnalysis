@@ -32,9 +32,8 @@ def _good_df() -> pd.DataFrame:
                 "batch": 8,
                 "block_id": 0,
                 "sm": 0,
-                "launch_anchor_ts": 100,
+                "start_clock": 1000,
                 "start_ts": 100,
-                "launch_offset": 0,
                 "elapsed": 20,
                 "sched": 0,
             },
@@ -43,9 +42,8 @@ def _good_df() -> pd.DataFrame:
                 "batch": 8,
                 "block_id": 1,
                 "sm": 1,
-                "launch_anchor_ts": 100,
+                "start_clock": 1020,
                 "start_ts": 120,
-                "launch_offset": 20,
                 "elapsed": 25,
                 "sched": 5,
             },
@@ -54,9 +52,8 @@ def _good_df() -> pd.DataFrame:
                 "batch": 16,
                 "block_id": 0,
                 "sm": 0,
-                "launch_anchor_ts": 200,
+                "start_clock": 2000,
                 "start_ts": 200,
-                "launch_offset": 0,
                 "elapsed": 10,
                 "sched": 0,
             },
@@ -73,24 +70,17 @@ class RequiredColumnsTests(unittest.TestCase):
         self.assertEqual(issues[0].severity, "error")
 
 
-class DelayChecksTests(unittest.TestCase):
-    def test_delay_definition_passes_for_good_data(self):
+class ClockChecksTests(unittest.TestCase):
+    def test_clock_fields_pass_for_good_data(self):
         df = _good_df()
-        issues = VAL.check_delay_definition(df)
+        issues = VAL.check_clock_fields(df)
         self.assertEqual(issues, [])
 
-    def test_delay_definition_catches_mismatch(self):
+    def test_clock_fields_catch_negative_clock_values(self):
         df = _good_df().copy()
-        df.loc[1, "launch_offset"] = 1
-        issues = VAL.check_delay_definition(df)
-        self.assertTrue(any(i.check == "launch_offset_definition" for i in issues))
-
-    def test_delay_definition_catches_negative_delay(self):
-        df = _good_df().copy()
-        df.loc[1, "launch_anchor_ts"] = 500
-        df.loc[1, "launch_offset"] = -380
-        issues = VAL.check_delay_definition(df)
-        self.assertTrue(any(i.check == "negative_launch_offset" for i in issues))
+        df.loc[1, "start_clock"] = -1
+        issues = VAL.check_clock_fields(df)
+        self.assertTrue(any(i.check == "negative_clock_field" for i in issues))
 
 
 class ElapsedChecksTests(unittest.TestCase):
@@ -108,20 +98,6 @@ class ElapsedChecksTests(unittest.TestCase):
         issues = VAL.check_sched_non_negative(df)
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0].check, "negative_sched")
-
-
-class ReadyStartChecksTests(unittest.TestCase):
-    def test_ready_not_after_start_passes_for_good_data(self):
-        df = _good_df()
-        issues = VAL.check_ready_not_after_start(df)
-        self.assertEqual(issues, [])
-
-    def test_ready_not_after_start_catches_violations(self):
-        df = _good_df().copy()
-        df.loc[1, "launch_anchor_ts"] = 130
-        issues = VAL.check_ready_not_after_start(df)
-        self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0].check, "launch_anchor_after_start")
 
 
 class DuplicateAndCoverageTests(unittest.TestCase):
@@ -143,7 +119,7 @@ class DuplicateAndCoverageTests(unittest.TestCase):
         # Reusing block_id is legal across multiple launches; only exact row duplicates should warn.
         extra = df.iloc[[0]].copy()
         extra.loc[extra.index[0], "start_ts"] = 140
-        extra.loc[extra.index[0], "launch_offset"] = 40
+        extra.loc[extra.index[0], "start_clock"] = 1040
         df = pd.concat([df, extra], ignore_index=True)
         issues = VAL.check_duplicate_blocks(df)
         self.assertEqual(issues, [])

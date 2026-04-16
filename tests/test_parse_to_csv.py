@@ -57,7 +57,7 @@ class CollectBinsTests(unittest.TestCase):
 
 
 class BuildBlockTableTests(unittest.TestCase):
-    def test_build_block_table_computes_ready_and_delay(self):
+    def test_build_block_table_computes_sched_from_start_clock(self):
         df = pd.DataFrame(
             [
                 {
@@ -99,20 +99,17 @@ class BuildBlockTableTests(unittest.TestCase):
 
         self.assertEqual(
             list(out.columns),
-            ["workload", "batch", "block_id", "sm", "launch_anchor_ts", "start_ts", "launch_offset", "elapsed", "sched"],
+            ["workload", "batch", "block_id", "sm", "start_clock", "start_ts", "elapsed", "sched"],
         )
 
         compute = out[out["workload"] == "compute"].sort_values("block_id")
-        self.assertEqual(int(compute.iloc[0]["launch_anchor_ts"]), 100)
-        self.assertEqual(int(compute.iloc[1]["launch_anchor_ts"]), 100)
-        self.assertEqual(int(compute.iloc[0]["launch_offset"]), 0)
-        self.assertEqual(int(compute.iloc[1]["launch_offset"]), 20)
+        self.assertEqual(int(compute.iloc[0]["start_clock"]), 1000)
+        self.assertEqual(int(compute.iloc[1]["start_clock"]), 1020)
         self.assertEqual(int(compute.iloc[0]["sched"]), 0)
         self.assertEqual(int(compute.iloc[1]["sched"]), 10)
 
         memory = out[out["workload"] == "memory"].iloc[0]
-        self.assertEqual(int(memory["launch_anchor_ts"]), 200)
-        self.assertEqual(int(memory["launch_offset"]), 0)
+        self.assertEqual(int(memory["start_clock"]), 2000)
         self.assertEqual(int(memory["sched"]), 0)
 
 
@@ -130,9 +127,8 @@ class WriteOutputsTests(unittest.TestCase):
                         "batch": 8,
                         "block_id": 0,
                         "sm": 1,
-                        "launch_anchor_ts": 100,
+                        "start_clock": 1000,
                         "start_ts": 100,
-                        "launch_offset": 0,
                         "elapsed": 10,
                         "sched": 0,
                     },
@@ -141,9 +137,8 @@ class WriteOutputsTests(unittest.TestCase):
                         "batch": 8,
                         "block_id": 1,
                         "sm": 2,
-                        "launch_anchor_ts": 100,
+                        "start_clock": 1010,
                         "start_ts": 110,
-                        "launch_offset": 10,
                         "elapsed": 11,
                         "sched": 2,
                     },

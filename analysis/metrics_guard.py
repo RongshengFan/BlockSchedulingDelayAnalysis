@@ -39,17 +39,10 @@ def _read_csv(path: Path, required: list[str]) -> pd.DataFrame:
 
 
 def load_tables(metrics_dir: Path, rank_file: Path | None = None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    sched_path = metrics_dir / "sched_summary_by_workload_batch.csv"
-    if sched_path.exists():
-        delay = _read_csv(
-            sched_path,
-            ["workload", "batch", "sched_cycles_per_sm_mean", "dispatch_gap_p95_cycles", "dispatch_gap_max_cycles"],
-        )
-    else:
-        delay = _read_csv(
-            metrics_dir / "delay_summary_by_workload_batch.csv",
-            ["workload", "batch", "delay_mean", "delay_p95", "delay_p99"],
-        )
+    delay = _read_csv(
+        metrics_dir / "sched_summary_by_workload_batch.csv",
+        ["workload", "batch", "sched_cycles_per_sm_mean", "sched_p95_cycles", "sched_max_cycles"],
+    )
     load = _read_csv(
         metrics_dir / "load_summary_by_workload_batch.csv",
         ["workload", "batch", "block_imbalance_ratio", "elapsed_sum_cv", "jain_block_fairness"],
@@ -59,10 +52,6 @@ def load_tables(metrics_dir: Path, rank_file: Path | None = None) -> tuple[pd.Da
         rank_path,
         ["workload", "overall_risk_score", "rank_imbalance", "rank_cv", "rank_fairness_bad"],
     )
-    if "rank_sched" not in rank.columns and "rank_delay" in rank.columns:
-        rank["rank_sched"] = rank["rank_delay"]
-    if "rank_delay" not in rank.columns and "rank_sched" in rank.columns:
-        rank["rank_delay"] = rank["rank_sched"]
     return delay, load, rank
 
 
@@ -77,7 +66,7 @@ def check_pair_coverage(delay: pd.DataFrame, load: pd.DataFrame) -> list[GuardIs
     only_delay = sorted(sd - sl)
     only_load = sorted(sl - sd)
     if only_delay:
-        issues.append(GuardIssue("pair_coverage", "error", f"pairs only in delay table: {only_delay[:8]}"))
+        issues.append(GuardIssue("pair_coverage", "error", f"pairs only in sched table: {only_delay[:8]}"))
     if only_load:
         issues.append(GuardIssue("pair_coverage", "error", f"pairs only in load table: {only_load[:8]}"))
     return issues
@@ -89,21 +78,17 @@ def check_workload_coverage(delay: pd.DataFrame, load: pd.DataFrame, rank: pd.Da
     wl = set(load["workload"].astype(str).unique().tolist())
     wr = set(rank["workload"].astype(str).unique().tolist())
     if wd != wl:
-        issues.append(GuardIssue("workload_coverage", "error", f"delay/load workloads differ: delay={sorted(wd)}, load={sorted(wl)}"))
+        issues.append(GuardIssue("workload_coverage", "error", f"sched/load workloads differ: sched={sorted(wd)}, load={sorted(wl)}"))
     if wd != wr:
-        issues.append(GuardIssue("workload_coverage", "warning", f"delay/ranking workloads differ: delay={sorted(wd)}, rank={sorted(wr)}"))
+        issues.append(GuardIssue("workload_coverage", "warning", f"sched/ranking workloads differ: sched={sorted(wd)}, rank={sorted(wr)}"))
     return issues
 
 
 def check_metric_ranges(delay: pd.DataFrame, load: pd.DataFrame) -> list[GuardIssue]:
     issues: list[GuardIssue] = []
 
-    if "dispatch_gap_p95_cycles" in delay.columns:
-        if (delay["sched_cycles_per_sm_mean"] < 0).any() or (delay["dispatch_gap_p95_cycles"] < 0).any() or (delay["dispatch_gap_max_cycles"] < 0).any():
-            issues.append(GuardIssue("sched_ranges", "error", "sched metrics contain negative values"))
-    else:
-        if (delay["delay_mean"] < 0).any() or (delay["delay_p95"] < 0).any() or (delay["delay_p99"] < 0).any():
-            issues.append(GuardIssue("delay_ranges", "error", "delay metrics contain negative values"))
+    if (delay["sched_cycles_per_sm_mean"] < 0).any() or (delay["sched_p95_cycles"] < 0).any() or (delay["sched_max_cycles"] < 0).any():
+        issues.append(GuardIssue("sched_ranges", "error", "sched metrics contain negative values"))
 
     if not ((load["jain_block_fairness"] >= 0) & (load["jain_block_fairness"] <= 1)).all():
         issues.append(GuardIssue("jain_range", "error", "jain_block_fairness out of [0,1]"))
@@ -119,9 +104,6 @@ def check_metric_ranges(delay: pd.DataFrame, load: pd.DataFrame) -> list[GuardIs
 
 def check_rank_consistency(rank: pd.DataFrame) -> list[GuardIssue]:
     issues: list[GuardIssue] = []
-    if "rank_sched" not in rank.columns and "rank_delay" in rank.columns:
-        rank = rank.copy()
-        rank["rank_sched"] = rank["rank_delay"]
     required = ["rank_sched", "rank_imbalance", "rank_cv", "rank_fairness_bad"]
     calc = rank[required].sum(axis=1)
     if not (calc == rank["overall_risk_score"]).all():

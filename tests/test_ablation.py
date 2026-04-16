@@ -27,12 +27,12 @@ ABL = _load_module(ROOT / "analysis" / "ablation.py", "ablation_test_mod")
 def _delay_df() -> pd.DataFrame:
     return pd.DataFrame(
         [
-            {"workload": "compute", "batch": 8, "dispatch_gap_p95_cycles": 10.0},
-            {"workload": "memory", "batch": 8, "dispatch_gap_p95_cycles": 5.0},
-            {"workload": "vgg16", "batch": 8, "dispatch_gap_p95_cycles": 20.0},
-            {"workload": "compute", "batch": 16, "dispatch_gap_p95_cycles": 12.0},
-            {"workload": "memory", "batch": 16, "dispatch_gap_p95_cycles": 4.0},
-            {"workload": "vgg16", "batch": 16, "dispatch_gap_p95_cycles": 22.0},
+            {"workload": "compute", "batch": 8, "sched_p95_cycles": 10.0},
+            {"workload": "memory", "batch": 8, "sched_p95_cycles": 5.0},
+            {"workload": "vgg16", "batch": 8, "sched_p95_cycles": 20.0},
+            {"workload": "compute", "batch": 16, "sched_p95_cycles": 12.0},
+            {"workload": "memory", "batch": 16, "sched_p95_cycles": 4.0},
+            {"workload": "vgg16", "batch": 16, "sched_p95_cycles": 22.0},
         ]
     )
 

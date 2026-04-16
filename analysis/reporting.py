@@ -104,25 +104,19 @@ def _filter_validation_batches(val: dict[str, Any], excluded_batches: set[int]) 
 
 def load_metrics(metrics_dir: Path, validation_summary: Path | None = None) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     sched_path = metrics_dir / "sched_summary_by_workload_batch.csv"
-    delay_path = metrics_dir / "delay_summary_by_workload_batch.csv"
-    if sched_path.exists():
-        delay = _read_csv(
-            sched_path,
-            [
-                "workload",
-                "batch",
-                "sched_cycles_per_sm_mean",
-                "dispatch_gap_p95_cycles",
-                "dispatch_gap_max_cycles",
-                "dispatch_gap_mean_cycles",
-                "dispatch_gap_event_count",
-            ],
-        )
-    else:
-        delay = _read_csv(
-            delay_path,
-            ["workload", "batch", "delay_mean", "delay_p95", "delay_p99", "gap_mean", "gap_p95", "records"],
-        )
+    delay = _read_csv(
+        sched_path,
+        [
+            "workload",
+            "batch",
+            "sched_cycles_per_sm_mean",
+            "sched_p95_cycles",
+            "sched_max_cycles",
+            "sched_mean_cycles",
+            "sched_event_count",
+            "sched_event_ratio",
+        ],
+    )
     load = _read_csv(
         metrics_dir / "load_summary_by_workload_batch.csv",
         [
@@ -157,50 +151,31 @@ def load_metrics(metrics_dir: Path, validation_summary: Path | None = None) -> t
 
 
 def _core_metric_spec(delay_df: pd.DataFrame) -> dict[str, str]:
-    if "dispatch_gap_p95_cycles" in delay_df.columns:
-        return {
-            "category": "sched",
-            "p95": "dispatch_gap_p95_cycles",
-            "mean": "dispatch_gap_mean_cycles",
-            "tail": "dispatch_gap_max_cycles",
-            "records": "dispatch_gap_event_count",
-            "agg_mean": "core_sched_p95_mean",
-            "detail_name": "dispatch-gap p95 scheduling delay",
-            "detail_short": "dispatch gap p95",
-        }
     return {
-        "category": "launch_offset",
-        "p95": "delay_p95",
-        "mean": "delay_mean",
-        "tail": "delay_p99",
-        "records": "records",
-        "agg_mean": "core_sched_p95_mean",
-        "detail_name": "relative launch-offset p95",
-        "detail_short": "launch offset p95",
+        "category": "sched",
+        "p95": "sched_p95_cycles",
+        "mean": "sched_mean_cycles",
+        "tail": "sched_max_cycles",
+        "records": "sched_event_count",
+        "agg_mean": "sched_p95_mean",
+        "detail_name": "Sched P95",
+        "detail_short": "Sched P95",
     }
 
 
 def build_metric_definitions(delay_df: pd.DataFrame) -> dict[str, str]:
-    spec = _core_metric_spec(delay_df)
     core_metric_desc = (
-        "Core scheduling summary is based on Neutrino-style dispatch-gap statistics. "
-        "For blocks observed on the same SM, the sched gap is defined as the actual "
-        "start time of the next block minus the actual end time of the previous block."
-        if spec["category"] == "sched"
-        else "Core scheduling summary falls back to relative launch-offset statistics "
-        "when Neutrino-style dispatch-gap summaries are unavailable."
+        "Core Sched summary follows the Neutrino-style same-SM block replacement reconstruction. "
+        "For a block observed on an SM, Sched is computed from the block start clock and the "
+        "end clock of the most recent finished block that it replaces on that SM."
     )
     return {
         "sched": (
-            "sched denotes the Neutrino-style scheduling gap on the same SM: the actual "
-            "start time of a newly dispatched block minus the actual end time of the "
-            "previous block observed on that SM."
+            "Sched is the core metric reconstructed from (start_clock, elapsed, sm). "
+            "Within the same SM, if a block replaces the most recent finished block slot, "
+            "its Sched value is start_clock_i - end_clock_j; otherwise Sched is 0."
         ),
-        "launch_offset": (
-            "launch_offset is a relative start offset measured from the earliest block "
-            "start timestamp in the same traced kernel run. It is not the true ready-to-run wait time."
-        ),
-        "core_sched_metric": core_metric_desc,
+        "sched_metric": core_metric_desc,
     }
 
 
@@ -212,9 +187,9 @@ def build_ranking_method_summary(
     return {
         "method": "equal_weight_rank_sum",
         "aggregation_level": "per-workload mean over retained batches",
-        "core_sched_metric": spec["p95"],
+        "sched_metric": spec["p95"],
         "dimensions": [
-            {"name": "sched", "column": "core_sched_p95_mean", "direction": "higher_worse"},
+            {"name": "sched", "column": spec["agg_mean"], "direction": "higher_worse"},
             {"name": "imbalance", "column": "imbalance_mean", "direction": "higher_worse"},
             {"name": "elapsed_cv", "column": "elapsed_cv_mean", "direction": "higher_worse"},
             {"name": "fairness", "column": "jain_mean", "direction": "lower_worse"},
@@ -285,7 +260,7 @@ def build_correlation_summary(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> 
         return {"core_metric": spec["p95"], "merged_rows": 0, "pairwise": []}
 
     delay_cols = ["workload", "batch", spec["p95"]]
-    for optional in ["dispatch_gap_event_count", "block_count_total"]:
+    for optional in ["sched_event_count", "sched_event_ratio", "block_count_total"]:
         if optional in delay_df.columns:
             delay_cols.append(optional)
 
@@ -302,25 +277,26 @@ def build_correlation_summary(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> 
             merged,
             spec["p95"],
             "block_imbalance_ratio",
-            f"{spec['p95']} vs block_imbalance_ratio",
+            f"{spec['detail_name']} vs block_imbalance_ratio",
         ),
         _pairwise_correlation(
             merged,
             spec["p95"],
             "elapsed_sum_cv",
-            f"{spec['p95']} vs elapsed_sum_cv",
+            f"{spec['detail_name']} vs elapsed_sum_cv",
         ),
         _pairwise_correlation(
             merged,
             spec["p95"],
             "jain_block_fairness",
-            f"{spec['p95']} vs jain_block_fairness",
+            f"{spec['detail_name']} vs jain_block_fairness",
         ),
     ]
 
-    if "dispatch_gap_event_count" in merged.columns and "block_count_total" in merged.columns:
+    if "sched_event_ratio" not in merged.columns and "sched_event_count" in merged.columns and "block_count_total" in merged.columns:
         denom = pd.to_numeric(merged["block_count_total"], errors="coerce").replace(0, pd.NA)
-        merged["sched_event_ratio"] = pd.to_numeric(merged["dispatch_gap_event_count"], errors="coerce") / denom
+        merged["sched_event_ratio"] = pd.to_numeric(merged["sched_event_count"], errors="coerce") / denom
+    if "sched_event_ratio" in merged.columns:
         pairwise.extend(
             [
                 _pairwise_correlation(
@@ -380,25 +356,25 @@ def build_sched_findings(delay_df: pd.DataFrame) -> list[Finding]:
         )
 
     by_work = delay_df.groupby("workload", as_index=False).agg(
-        core_sched_p95_mean=(p95_col, "mean"),
-        core_sched_tail_mean=(tail_col, "mean"),
-        core_sched_mean=(mean_col, "mean"),
+        sched_p95_mean=(p95_col, "mean"),
+        sched_max_mean=(tail_col, "mean"),
+        sched_mean=(mean_col, "mean"),
         records_total=(records_col, "sum"),
     )
 
-    slow = by_work.sort_values("core_sched_p95_mean", ascending=False).iloc[0]
-    fast = by_work.sort_values("core_sched_p95_mean", ascending=True).iloc[0]
+    slow = by_work.sort_values("sched_p95_mean", ascending=False).iloc[0]
+    fast = by_work.sort_values("sched_p95_mean", ascending=True).iloc[0]
     findings.append(
         Finding(
             category=spec["category"],
             workload=str(slow["workload"]),
             batch=None,
             severity="high",
-            metric="core_sched_p95_mean",
-            value=float(slow["core_sched_p95_mean"]),
+            metric=spec["agg_mean"],
+            value=float(slow["sched_p95_mean"]),
             detail=(
                 f"overall highest mean {spec['detail_name']} workload is {slow['workload']} "
-                f"(value={float(slow['core_sched_p95_mean']):.4f})"
+                f"(value={float(slow['sched_p95_mean']):.4f})"
             ),
         )
     )
@@ -408,11 +384,11 @@ def build_sched_findings(delay_df: pd.DataFrame) -> list[Finding]:
             workload=str(fast["workload"]),
             batch=None,
             severity="info",
-            metric="core_sched_p95_mean",
-            value=float(fast["core_sched_p95_mean"]),
+            metric=spec["agg_mean"],
+            value=float(fast["sched_p95_mean"]),
             detail=(
                 f"overall lowest mean {spec['detail_name']} workload is {fast['workload']} "
-                f"(value={float(fast['core_sched_p95_mean']):.4f})"
+                f"(value={float(fast['sched_p95_mean']):.4f})"
             ),
         )
     )
@@ -507,7 +483,7 @@ def aggregate_ranking(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> pd.DataF
     delay_rank = (
         delay_df.groupby("workload", as_index=False)[spec["p95"]]
         .mean()
-        .rename(columns={spec["p95"]: "core_sched_p95_mean"})
+        .rename(columns={spec["p95"]: spec["agg_mean"]})
     )
     load_rank = (
         load_df.groupby("workload", as_index=False)[["block_imbalance_ratio", "elapsed_sum_cv", "jain_block_fairness"]]
@@ -522,15 +498,13 @@ def aggregate_ranking(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> pd.DataF
     )
 
     rank = delay_rank.merge(load_rank, on="workload", how="outer").fillna(0)
-    # Higher scheduling-gap/imbalance/CV are worse, lower Jain fairness is worse.
+    # Higher Sched/imbalance/CV are worse, lower Jain fairness is worse.
     # Risk score is defined so larger score means higher risk.
-    rank["rank_sched"] = rank["core_sched_p95_mean"].rank(ascending=True, method="min")
+    rank["rank_sched"] = rank[spec["agg_mean"]].rank(ascending=True, method="min")
     rank["rank_imbalance"] = rank["imbalance_mean"].rank(ascending=True, method="min")
     rank["rank_cv"] = rank["elapsed_cv_mean"].rank(ascending=True, method="min")
     rank["rank_fairness_bad"] = rank["jain_mean"].rank(ascending=False, method="min")
     rank["overall_risk_score"] = rank[["rank_sched", "rank_imbalance", "rank_cv", "rank_fairness_bad"]].sum(axis=1)
-    rank["delay_p95_mean"] = rank["core_sched_p95_mean"]
-    rank["rank_delay"] = rank["rank_sched"]
     rank = rank.sort_values("overall_risk_score", ascending=False).reset_index(drop=True)
     return rank
 
@@ -555,7 +529,6 @@ def build_conclusion(
         "ranking_method": build_ranking_method_summary(delay_df, excluded_batches=excluded_batches),
         "correlation_summary": corr_summary,
         "sched_findings": [x.as_dict() for x in sched_findings],
-        "delay_findings": [x.as_dict() for x in sched_findings],
         "load_findings": [x.as_dict() for x in load_findings],
         "top_risk_workload": top_risk,
         "lowest_risk_workload": low_risk,
@@ -565,20 +538,19 @@ def build_conclusion(
 
 def to_markdown(conclusion: dict[str, Any], rank_df: pd.DataFrame) -> str:
     val = conclusion["validation"]
-    sched_findings = conclusion.get("sched_findings", conclusion.get("delay_findings", []))
+    sched_findings = conclusion.get("sched_findings", [])
     load_findings = conclusion["load_findings"]
     metric_defs = conclusion.get("metric_definitions", {})
     ranking_method = conclusion.get("ranking_method", {})
     corr_summary = conclusion.get("correlation_summary", {})
 
     lines: list[str] = []
-    lines.append("# Scheduling Delay and Load Analysis Report")
+    lines.append("# Sched and Load Analysis Report")
     lines.append("")
     lines.append("## 1) Metric Notes")
     if metric_defs:
         lines.append(f"- sched: {metric_defs.get('sched', '')}")
-        lines.append(f"- launch_offset: {metric_defs.get('launch_offset', '')}")
-        lines.append(f"- core metric: {metric_defs.get('core_sched_metric', '')}")
+        lines.append(f"- sched metric: {metric_defs.get('sched_metric', '')}")
     else:
         lines.append("- no metric notes")
     lines.append("")
@@ -591,12 +563,12 @@ def to_markdown(conclusion: dict[str, Any], rank_df: pd.DataFrame) -> str:
     lines.append(f"- warnings: {issue_counts.get('warning', 0)}")
     lines.append("")
 
-    lines.append("## 3) Scheduling Findings")
+    lines.append("## 3) Sched Findings")
     if sched_findings:
         for f in sched_findings:
             lines.append(f"- [{f['severity']}] {f['detail']}")
     else:
-        lines.append("- no scheduling findings")
+        lines.append("- no Sched findings")
     lines.append("")
 
     lines.append("## 4) Load Findings")
@@ -644,7 +616,7 @@ def to_markdown(conclusion: dict[str, Any], rank_df: pd.DataFrame) -> str:
             lines.append(
                 "- "
                 f"{row['workload']}: score={float(row['overall_risk_score']):.2f}, "
-                f"core_sched_p95_mean={float(row['core_sched_p95_mean']):.4f}, "
+                f"sched_p95_mean={float(row['sched_p95_mean']):.4f}, "
                 f"imbalance_mean={float(row['imbalance_mean']):.4f}, "
                 f"jain_mean={float(row['jain_mean']):.4f}"
             )
@@ -655,12 +627,12 @@ def to_markdown(conclusion: dict[str, Any], rank_df: pd.DataFrame) -> str:
     lines.append("## 7) Conclusion")
     if top_risk and low_risk:
         lines.append(
-            "- Highest scheduling risk workload: "
+            "- Highest Sched risk workload: "
             f"{top_risk.get('workload', 'unknown')} "
             f"(score={float(top_risk.get('overall_risk_score', 0)):.2f})"
         )
         lines.append(
-            "- Lowest scheduling risk workload: "
+            "- Lowest Sched risk workload: "
             f"{low_risk.get('workload', 'unknown')} "
             f"(score={float(low_risk.get('overall_risk_score', 0)):.2f})"
         )

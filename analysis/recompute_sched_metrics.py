@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Recompute Neutrino-style scheduling metrics from raw block traces.
+"""Recompute Neutrino-style Sched metrics from raw block traces.
 
-This script does not replace the existing delay metric. Instead, it derives a
-second metric family directly from raw traces using the same scheduling-gap
-approximation described by Neutrino's block_sched example: for blocks observed
-on the same SM, if a new block starts after a previously recorded block on that
-SM has ended, the gap is treated as a block replacement scheduling interval.
+This script derives the Sched metric family directly from raw traces using the
+same same-SM block replacement reconstruction described by Neutrino's
+block_sched example.
 """
 
 from __future__ import annotations
@@ -66,7 +64,7 @@ def parse_one_bin_sched_rows(bin_file: str) -> list[dict]:
     return rows
 
 
-def simulate_sm_dispatch_gaps(run_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def simulate_sm_sched_events(run_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     detail_rows: list[dict] = []
     event_rows: list[dict] = []
 
@@ -92,7 +90,7 @@ def simulate_sm_dispatch_gaps(run_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
                         "block_id": int(block["block_id"]),
                         "prev_end_clock": int(replaced["end_clock"]),
                         "start_clock": int(block["start_clock"]),
-                        "dispatch_gap": gap,
+                        "sched": gap,
                     }
                 )
                 slots.remove(replaced)
@@ -106,11 +104,11 @@ def simulate_sm_dispatch_gaps(run_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Da
                 **run_meta,
                 "sm": int(sm),
                 "block_count": int(len(sm_df)),
-                "dispatch_gap_event_count": int(len(sched_gaps)),
+                "sched_event_count": int(len(sched_gaps)),
                 "sched_cycles_total": int(gap_series.sum()) if not gap_series.empty else 0,
-                "dispatch_gap_mean_cycles": float(gap_series.mean()) if not gap_series.empty else 0.0,
-                "dispatch_gap_p95_cycles": float(gap_series.quantile(0.95)) if not gap_series.empty else 0.0,
-                "dispatch_gap_max_cycles": int(gap_series.max()) if not gap_series.empty else 0,
+                "sched_mean_cycles": float(gap_series.mean()) if not gap_series.empty else 0.0,
+                "sched_p95_cycles": float(gap_series.quantile(0.95)) if not gap_series.empty else 0.0,
+                "sched_max_cycles": int(gap_series.max()) if not gap_series.empty else 0,
                 "work_cycles_total": int(elapsed_series.sum()),
                 "block_elapsed_mean_cycles": float(elapsed_series.mean()) if not elapsed_series.empty else 0.0,
                 "block_elapsed_p95_cycles": float(elapsed_series.quantile(0.95)) if not elapsed_series.empty else 0.0,
@@ -129,7 +127,7 @@ def build_sched_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd
 
     group_cols = ["workload", "batch", "trace_id", "kernel_run_id"]
     for _, run_df in df.groupby(group_cols, sort=True):
-        detail_df, event_df = simulate_sm_dispatch_gaps(run_df)
+        detail_df, event_df = simulate_sm_sched_events(run_df)
         detail_parts.append(detail_df)
         if not event_df.empty:
             event_parts.append(event_df)
@@ -146,14 +144,14 @@ def build_sched_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd
             "block_id",
             "prev_end_clock",
             "start_clock",
-            "dispatch_gap",
+            "sched",
         ]
     )
 
     summary_rows: list[dict] = []
     for (workload, batch), sub in detail.groupby(["workload", "batch"], sort=True):
         sub_events = events[(events["workload"] == workload) & (events["batch"] == batch)]
-        event_gap = sub_events["dispatch_gap"].astype("int64") if not sub_events.empty else pd.Series(dtype="int64")
+        event_gap = sub_events["sched"].astype("int64") if not sub_events.empty else pd.Series(dtype="int64")
         summary_rows.append(
             {
                 "workload": workload,
@@ -162,12 +160,17 @@ def build_sched_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd
                 "kernel_run_count": int(sub[["trace_id", "kernel_run_id"]].drop_duplicates().shape[0]),
                 "sm_observed": int(sub["sm"].nunique()),
                 "block_count_total": int(sub["block_count"].sum()),
-                "dispatch_gap_event_count": int(sub["dispatch_gap_event_count"].sum()),
+                "sched_event_count": int(sub["sched_event_count"].sum()),
+                "sched_event_ratio": (
+                    float(sub["sched_event_count"].sum()) / float(sub["block_count"].sum())
+                    if float(sub["block_count"].sum()) > 0
+                    else 0.0
+                ),
                 "sched_cycles_per_sm_mean": float(sub["sched_cycles_total"].mean()),
                 "sched_cycles_per_sm_p95": float(sub["sched_cycles_total"].quantile(0.95)),
-                "dispatch_gap_mean_cycles": float(event_gap.mean()) if not event_gap.empty else 0.0,
-                "dispatch_gap_p95_cycles": float(event_gap.quantile(0.95)) if not event_gap.empty else 0.0,
-                "dispatch_gap_max_cycles": int(event_gap.max()) if not event_gap.empty else 0,
+                "sched_mean_cycles": float(event_gap.mean()) if not event_gap.empty else 0.0,
+                "sched_p95_cycles": float(event_gap.quantile(0.95)) if not event_gap.empty else 0.0,
+                "sched_max_cycles": int(event_gap.max()) if not event_gap.empty else 0,
                 "work_cycles_per_sm_mean": float(sub["work_cycles_total"].mean()),
                 "block_elapsed_mean_cycles": float(sub["block_elapsed_mean_cycles"].mean()),
                 "block_elapsed_p95_cycles": float(sub["block_elapsed_p95_cycles"].quantile(0.95)),
@@ -188,13 +191,16 @@ def build_sched_tables(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd
 
 def write_outputs(detail: pd.DataFrame, events: pd.DataFrame, summary: pd.DataFrame, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+    old_events = out_dir / "dispatch_gap_events.csv"
+    if old_events.exists():
+        old_events.unlink()
     detail.to_csv(out_dir / "sched_detail_by_sm.csv", index=False)
-    events.to_csv(out_dir / "dispatch_gap_events.csv", index=False)
+    events.to_csv(out_dir / "sched_events.csv", index=False)
     summary.to_csv(out_dir / "sched_summary_by_workload_batch.csv", index=False)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Recompute Neutrino-style scheduling metrics from raw traces")
+    parser = argparse.ArgumentParser(description="Recompute Neutrino-style Sched metrics from raw traces")
     parser.add_argument("paths", nargs="*", help="glob patterns to .bin files")
     parser.add_argument("--out-dir", default="../output/chart/metrics/base", help="output directory for scheduling metric csv files")
     parser.add_argument(
@@ -231,7 +237,7 @@ def main() -> None:
 
     print(f"[done] block_rows={len(df)}")
     print(f"[done] sched_detail_rows={len(detail)}")
-    print(f"[done] dispatch_gap_events={len(events)}")
+    print(f"[done] sched_events={len(events)}")
     print(f"[done] summary_rows={len(summary)}")
     print(f"[done] outputs at {out_dir}")
 

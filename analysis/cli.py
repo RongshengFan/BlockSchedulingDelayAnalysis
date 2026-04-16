@@ -64,8 +64,6 @@ def migrate_legacy_metric_outputs(chart_dir: str) -> None:
 
     mapping = {
         # base metrics
-        "delay_detail.csv": "base",
-        "delay_summary_by_workload_batch.csv": "base",
         "load_per_sm.csv": "base",
         "load_summary_by_workload_batch.csv": "base",
         # validation

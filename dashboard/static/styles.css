@@ -201,7 +201,7 @@ button {
 }
 
 .insight-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
 .insight-card {
@@ -220,6 +220,31 @@ button {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
+}
+
+.storyline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.story-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(245, 247, 251, 0.92) 100%);
+}
+
+.story-card strong {
+  font-size: 14px;
+}
+
+.story-card p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.65;
 }
 
 .mini-button,
@@ -274,6 +299,30 @@ button {
 .plot-caption {
   margin-top: 8px;
   font-size: 13px;
+  color: var(--muted);
+}
+
+.plot-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.plot-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.plot-stat-chip strong {
+  font-size: 12px;
   color: var(--muted);
 }
 

@@ -31,9 +31,8 @@ def _base_df() -> pd.DataFrame:
                 "batch": 8,
                 "block_id": 0,
                 "sm": 0,
-                "launch_anchor_ts": 10,
+                "start_clock": 100,
                 "start_ts": 10,
-                "launch_offset": 0,
                 "elapsed": 3,
                 "sched": 0,
             },
@@ -42,9 +41,8 @@ def _base_df() -> pd.DataFrame:
                 "batch": 8,
                 "block_id": 1,
                 "sm": 1,
-                "launch_anchor_ts": 10,
+                "start_clock": 105,
                 "start_ts": 15,
-                "launch_offset": 5,
                 "elapsed": 4,
                 "sched": 1,
             },
@@ -53,9 +51,8 @@ def _base_df() -> pd.DataFrame:
                 "batch": 16,
                 "block_id": 0,
                 "sm": 0,
-                "launch_anchor_ts": 20,
+                "start_clock": 200,
                 "start_ts": 20,
-                "launch_offset": 0,
                 "elapsed": 6,
                 "sched": 0,
             },
@@ -71,33 +68,25 @@ class NullAndSchemaTests(unittest.TestCase):
 
     def test_check_nulls_emits_issues(self):
         df = _base_df().copy()
-        df.loc[1, "launch_offset"] = None
-        issues = VAL.check_nulls(df, ["launch_offset"])
+        df.loc[1, "start_clock"] = None
+        issues = VAL.check_nulls(df, ["start_clock"])
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0].check, "null_values")
 
     def test_validate_dataframe_with_missing_schema_only_returns_required_columns(self):
-        df = pd.DataFrame([{"workload": "x", "batch": 1, "launch_offset": 0}])
+        df = pd.DataFrame([{"workload": "x", "batch": 1, "start_clock": 0}])
         issues = VAL.validate_dataframe(df)
         self.assertEqual(len(issues), 1)
         self.assertEqual(issues[0].check, "required_columns")
 
 
-class DelayAndTimingTests(unittest.TestCase):
-    def test_delay_mismatch_and_negative_detected_together(self):
+class ClockTests(unittest.TestCase):
+    def test_negative_clock_detected(self):
         df = _base_df().copy()
-        df.loc[1, "launch_anchor_ts"] = 30
-        df.loc[1, "launch_offset"] = -20
-        issues = VAL.check_delay_definition(df)
+        df.loc[1, "start_clock"] = -20
+        issues = VAL.check_clock_fields(df)
         checks = {i.check for i in issues}
-        self.assertIn("negative_launch_offset", checks)
-
-    def test_ready_not_after_start(self):
-        df = _base_df().copy()
-        df.loc[0, "launch_anchor_ts"] = 99
-        issues = VAL.check_ready_not_after_start(df)
-        self.assertEqual(len(issues), 1)
-        self.assertEqual(issues[0].check, "launch_anchor_after_start")
+        self.assertIn("negative_clock_field", checks)
 
 
 class DuplicateTests(unittest.TestCase):
@@ -143,15 +132,13 @@ class ValidationFlowTests(unittest.TestCase):
     def test_validate_dataframe_multiple_error_types(self):
         df = _base_df().copy()
         df.loc[0, "elapsed"] = 0
-        df.loc[1, "launch_anchor_ts"] = 999
-        df.loc[1, "launch_offset"] = -984
+        df.loc[1, "start_clock"] = -984
         df.loc[1, "sched"] = -1
         issues = VAL.validate_dataframe(df, min_sms=2)
         checks = {i.check for i in issues}
         self.assertIn("elapsed_positive", checks)
-        self.assertIn("negative_launch_offset", checks)
+        self.assertIn("negative_clock_field", checks)
         self.assertIn("negative_sched", checks)
-        self.assertIn("launch_anchor_after_start", checks)
 
     def test_validate_dataframe_clean_input(self):
         df = _base_df().copy()

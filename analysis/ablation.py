@@ -17,19 +17,15 @@ BASE_DIR = Path(__file__).resolve().parent
 
 def load_metric_tables(metrics_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     sched_file = metrics_dir / "sched_summary_by_workload_batch.csv"
-    delay_file = sched_file if sched_file.exists() else metrics_dir / "delay_summary_by_workload_batch.csv"
     load_file = metrics_dir / "load_summary_by_workload_batch.csv"
-    if not delay_file.exists():
-        raise SystemExit(f"missing file: {delay_file}")
+    if not sched_file.exists():
+        raise SystemExit(f"missing file: {sched_file}")
     if not load_file.exists():
         raise SystemExit(f"missing file: {load_file}")
 
-    delay = pd.read_csv(delay_file)
+    delay = pd.read_csv(sched_file)
     load = pd.read_csv(load_file)
-    if "dispatch_gap_p95_cycles" in delay.columns:
-        req_delay = {"workload", "batch", "dispatch_gap_p95_cycles"}
-    else:
-        req_delay = {"workload", "batch", "delay_p95"}
+    req_delay = {"workload", "batch", "sched_p95_cycles"}
     req_load = {"workload", "batch", "block_imbalance_ratio", "elapsed_sum_cv", "jain_block_fairness"}
     md = req_delay.difference(delay.columns)
     ml = req_load.difference(load.columns)
@@ -41,11 +37,10 @@ def load_metric_tables(metrics_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def aggregate_ranking(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> pd.DataFrame:
-    metric_col = "dispatch_gap_p95_cycles" if "dispatch_gap_p95_cycles" in delay_df.columns else "delay_p95"
     delay_rank = (
-        delay_df.groupby("workload", as_index=False)[metric_col]
+        delay_df.groupby("workload", as_index=False)["sched_p95_cycles"]
         .mean()
-        .rename(columns={metric_col: "core_sched_p95_mean"})
+        .rename(columns={"sched_p95_cycles": "sched_p95_mean"})
     )
     load_rank = (
         load_df.groupby("workload", as_index=False)[["block_imbalance_ratio", "elapsed_sum_cv", "jain_block_fairness"]]
@@ -62,13 +57,11 @@ def aggregate_ranking(delay_df: pd.DataFrame, load_df: pd.DataFrame) -> pd.DataF
     rank = delay_rank.merge(load_rank, on="workload", how="outer").fillna(0)
     # Higher scheduling-gap/imbalance/CV are worse, lower Jain fairness is worse.
     # Risk score is defined so larger score means higher risk.
-    rank["rank_sched"] = rank["core_sched_p95_mean"].rank(ascending=True, method="min")
+    rank["rank_sched"] = rank["sched_p95_mean"].rank(ascending=True, method="min")
     rank["rank_imbalance"] = rank["imbalance_mean"].rank(ascending=True, method="min")
     rank["rank_cv"] = rank["elapsed_cv_mean"].rank(ascending=True, method="min")
     rank["rank_fairness_bad"] = rank["jain_mean"].rank(ascending=False, method="min")
     rank["overall_risk_score"] = rank[["rank_sched", "rank_imbalance", "rank_cv", "rank_fairness_bad"]].sum(axis=1)
-    rank["delay_p95_mean"] = rank["core_sched_p95_mean"]
-    rank["rank_delay"] = rank["rank_sched"]
     return rank.sort_values(["overall_risk_score", "workload"], ascending=[False, True]).reset_index(drop=True)
 
 

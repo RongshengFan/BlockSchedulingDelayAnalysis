@@ -13,3 +13,5 @@ workloads/*.so
 neutrino/build/
 neutrino/neutrino.egg-info/
 neutrino/.git.upstream/
+
+.venv/

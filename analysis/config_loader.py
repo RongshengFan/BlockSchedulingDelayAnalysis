@@ -14,7 +14,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11 fallback
+    import tomli as tomllib
 
 
 DEFAULT_WORKLOADS = ["compute", "memory", "mixed", "sparse", "vgg16"]

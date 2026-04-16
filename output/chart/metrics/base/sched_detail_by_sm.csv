@@ -1,4 +1,4 @@
-workload,batch,trace_id,kernel_run_id,sm,block_count,dispatch_gap_event_count,sched_cycles_total,dispatch_gap_mean_cycles,dispatch_gap_p95_cycles,dispatch_gap_max_cycles,work_cycles_total,block_elapsed_mean_cycles,block_elapsed_p95_cycles,inferred_slot_count
+workload,batch,trace_id,kernel_run_id,sm,block_count,sched_event_count,sched_cycles_total,sched_mean_cycles,sched_p95_cycles,sched_max_cycles,work_cycles_total,block_elapsed_mean_cycles,block_elapsed_p95_cycles,inferred_slot_count
 compute,8,Mar08_221120_1837392,2.229752,0,4,0,0,0.0,0.0,0,2001417,500354.25,589723.8999999999,4
 compute,8,Mar08_221120_1837392,2.229752,1,4,0,0,0.0,0.0,0,2003051,500762.75,588410.1499999999,4
 compute,8,Mar08_221120_1837392,2.229752,2,4,0,0,0.0,0.0,0,1988479,497119.75,594036.6,4

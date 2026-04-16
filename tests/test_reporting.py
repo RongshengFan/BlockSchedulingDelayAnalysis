@@ -32,37 +32,41 @@ def _sched_df() -> pd.DataFrame:
                 "workload": "compute",
                 "batch": 8,
                 "sched_cycles_per_sm_mean": 2.0,
-                "dispatch_gap_event_count": 100,
-                "dispatch_gap_mean_cycles": 2.0,
-                "dispatch_gap_p95_cycles": 4.0,
-                "dispatch_gap_max_cycles": 6.0,
+                "sched_event_count": 100,
+                "sched_event_ratio": 0.5,
+                "sched_mean_cycles": 2.0,
+                "sched_p95_cycles": 4.0,
+                "sched_max_cycles": 6.0,
             },
             {
                 "workload": "memory",
                 "batch": 8,
                 "sched_cycles_per_sm_mean": 3.0,
-                "dispatch_gap_event_count": 100,
-                "dispatch_gap_mean_cycles": 3.0,
-                "dispatch_gap_p95_cycles": 5.0,
-                "dispatch_gap_max_cycles": 8.0,
+                "sched_event_count": 100,
+                "sched_event_ratio": 0.5,
+                "sched_mean_cycles": 3.0,
+                "sched_p95_cycles": 5.0,
+                "sched_max_cycles": 8.0,
             },
             {
                 "workload": "compute",
                 "batch": 16,
                 "sched_cycles_per_sm_mean": 4.0,
-                "dispatch_gap_event_count": 150,
-                "dispatch_gap_mean_cycles": 4.0,
-                "dispatch_gap_p95_cycles": 7.0,
-                "dispatch_gap_max_cycles": 9.0,
+                "sched_event_count": 150,
+                "sched_event_ratio": 0.75,
+                "sched_mean_cycles": 4.0,
+                "sched_p95_cycles": 7.0,
+                "sched_max_cycles": 9.0,
             },
             {
                 "workload": "memory",
                 "batch": 16,
                 "sched_cycles_per_sm_mean": 1.0,
-                "dispatch_gap_event_count": 150,
-                "dispatch_gap_mean_cycles": 1.0,
-                "dispatch_gap_p95_cycles": 2.0,
-                "dispatch_gap_max_cycles": 3.0,
+                "sched_event_count": 150,
+                "sched_event_ratio": 0.75,
+                "sched_mean_cycles": 1.0,
+                "sched_p95_cycles": 2.0,
+                "sched_max_cycles": 3.0,
             },
         ]
     )
@@ -202,7 +206,7 @@ class MarkdownAndSaveTests(unittest.TestCase):
         c = REP.build_conclusion(delay, load, val, rank)
         text = REP.to_markdown(c, rank)
         self.assertIn("Validation", text)
-        self.assertIn("Scheduling Findings", text)
+        self.assertIn("Sched Findings", text)
         self.assertIn("Load Findings", text)
         self.assertIn("Correlation Summary", text)
         self.assertIn("Workload Composite Ranking", text)

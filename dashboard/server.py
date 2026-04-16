@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import mimetypes
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -91,7 +92,7 @@ class MetricsRepository:
 
     def chart_gallery(self) -> list[dict[str, Any]]:
         groups: list[dict[str, Any]] = []
-        for category in ["overview", "sched", "load"]:
+        for category in ["overview", "sched", "load", "correlation"]:
             category_dir = self.chart_dir / category
             if not category_dir.exists():
                 continue
@@ -264,16 +265,84 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                 self._send_json({"error": "unsupported metric", "metric": metric, "records": []}, status=HTTPStatus.BAD_REQUEST)
                 return
 
-            df = self.repo.sched_detail()
+            df = self._apply_filters(self.repo.sched_detail(), workloads, batches)
             value_col = "sched"
+            if df.empty or value_col not in df.columns:
+                self._send_json(
+                    {
+                        "metric": metric,
+                        "summary": {
+                            "total_count": 0,
+                            "nonzero_count": 0,
+                            "zero_ratio": 0.0,
+                            "q50": 0.0,
+                            "q95": 0.0,
+                            "q99": 0.0,
+                        },
+                        "bins": [],
+                    }
+                )
+                return
 
-            df = self._apply_filters(df, workloads, batches)
-            if not df.empty and value_col in df.columns:
-                df = df[["workload", "batch", value_col]].copy()
-                df = df.rename(columns={value_col: "value"})
+            values = pd.to_numeric(df[value_col], errors="coerce").dropna()
+            total_count = int(values.size)
+            positive = values[values > 0]
+            nonzero_count = int(positive.size)
+            zero_ratio = 0.0 if total_count == 0 else float((values <= 0).mean())
+            if nonzero_count == 0:
+                self._send_json(
+                    {
+                        "metric": metric,
+                        "summary": {
+                            "total_count": total_count,
+                            "nonzero_count": 0,
+                            "zero_ratio": zero_ratio,
+                            "q50": 0.0,
+                            "q95": 0.0,
+                            "q99": 0.0,
+                        },
+                        "bins": [],
+                    }
+                )
+                return
+
+            q50 = float(positive.quantile(0.50))
+            q95 = float(positive.quantile(0.95))
+            q99 = float(positive.quantile(0.99))
+            vmin = max(float(positive.min()), 1.0)
+            vmax = max(float(positive.max()), vmin)
+            bin_count = 18
+            log_min = math.log10(vmin)
+            log_max = math.log10(vmax)
+            if math.isclose(log_min, log_max):
+                edges = [vmin, vmax + 1.0]
             else:
-                df = pd.DataFrame(columns=["workload", "batch", "value"])
-            self._send_json({"metric": metric, "records": _normalize_records(df.head(5000))})
+                step = (log_max - log_min) / bin_count
+                edges = [10 ** (log_min + step * idx) for idx in range(bin_count + 1)]
+            bins: list[dict[str, Any]] = []
+            for left, right in zip(edges[:-1], edges[1:]):
+                if right <= left:
+                    continue
+                if right == edges[-1]:
+                    count = int(((positive >= left) & (positive <= right)).sum())
+                else:
+                    count = int(((positive >= left) & (positive < right)).sum())
+                bins.append({"left": float(left), "right": float(right), "count": count})
+
+            self._send_json(
+                {
+                    "metric": metric,
+                    "summary": {
+                        "total_count": total_count,
+                        "nonzero_count": nonzero_count,
+                        "zero_ratio": zero_ratio,
+                        "q50": q50,
+                        "q95": q95,
+                        "q99": q99,
+                    },
+                    "bins": bins,
+                }
+            )
             return
 
         if parsed.path == "/api/heatmap":
