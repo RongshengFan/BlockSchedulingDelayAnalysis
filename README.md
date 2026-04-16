@@ -141,7 +141,7 @@ $$
 e_i = s_i + d_i
 $$
 
-其中，$s_i$ 表示当前 block 的 `start_clock`，$d_i$ 表示其 `elapsed`，$e_i$ 表示对应的 `end_clock`。  
+其中， $s_i$ 表示当前 block 的 `start_clock`， $d_i$ 表示其 `elapsed`， $e_i$ 表示对应的 `end_clock`。  
 `end_clock` 不作为单独输出指标，但它是识别 `Sched` 事件的中间量。
 
 ## 核心指标说明
@@ -156,7 +156,7 @@ $$
 \mathrm{Sched}_i = s_i - e_j
 $$
 
-其中 $s_i$ 表示当前 block 的 `start_clock`，$e_j$ 表示被替换前驱 block 的 `end_clock`；`j` 为当前可被替换、且结束时间最接近 `start_clock` 的 block。若不存在满足条件的前驱 block，则当前 block 不构成有效 `Sched` 事件，记：
+其中 $s_i$ 表示当前 block 的 `start_clock`, $e_j$ 表示被替换前驱 block 的 `end_clock`；`j` 为当前可被替换、且结束时间最接近 `start_clock` 的 block。若不存在满足条件的前驱 block，则当前 block 不构成有效 `Sched` 事件，记：
 
 $$
 \mathrm{Sched}_i = 0
