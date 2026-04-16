@@ -83,7 +83,6 @@ neutrino 安装
 | `elapsed_sum_cv` | 各 SM 上累计执行时长之和的变异系数。 |
 | `jain_block_fairness` | 基于各 SM block 数计算的 Jain 公平性指数。 |
 
-`launch_offset` 仍保留在解析后的明细表中，作为兼容字段与辅助观测字段使用，但不作为主分析指标展开。
 
 ## 项目结构
 
