@@ -1,0 +1,12 @@
+{
+  "summary": {
+    "passed": true,
+    "issue_counts": {
+      "error": 0,
+      "warning": 0,
+      "info": 0
+    },
+    "total_issues": 0
+  },
+  "issues": []
+}

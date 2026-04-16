@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+traces/
+
+workloads/build/
+workloads/*.so
+
+neutrino/build/
+neutrino/neutrino.egg-info/
+neutrino/.git.upstream/

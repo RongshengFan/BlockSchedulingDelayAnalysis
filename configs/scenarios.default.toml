@@ -1,0 +1,22 @@
+[[scenario]]
+name = "full_default"
+action = "all"
+config = "configs/pipeline.default.toml"
+dry_run = true
+
+[[scenario]]
+name = "vgg16_focus"
+action = "collect"
+config = "configs/pipeline.default.toml"
+workloads = ["vgg16"]
+batches = [8, 16]
+iters = 2
+iters_vgg16 = 1
+dry_run = true
+continue_on_error = true
+
+[[scenario]]
+name = "post_collect_reports"
+action = "report"
+config = "configs/pipeline.default.toml"
+dry_run = true

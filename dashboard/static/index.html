@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Block Scheduling Delay Dashboard</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="topbar">
+        <div class="brand">
+          <h1>GPU Block Scheduling Dashboard</h1>
+          <p class="subtle">本地读取 output/ 指标与图表，聚焦 sched 口径。</p>
+        </div>
+        <div class="topbar-right">
+          <div class="top-controls">
+            <label class="control">
+              <span>Workload</span>
+              <select id="workloadFilter"></select>
+            </label>
+            <label class="control">
+              <span>Batch</span>
+              <select id="batchFilter"></select>
+            </label>
+            <button id="refreshButton" type="button">刷新</button>
+          </div>
+          <div id="metaInfo" class="meta-chip"></div>
+        </div>
+      </header>
+
+      <main class="content">
+
+        <section class="cards-grid">
+          <article class="panel metric-card"><h3>最高风险 Workload</h3><strong id="topRiskWorkload">-</strong><span id="topRiskScore">-</span></article>
+          <article class="panel metric-card"><h3>最大 sched P95</h3><strong id="peakSchedP95">-</strong><span id="peakSchedWorkload">-</span></article>
+          <article class="panel metric-card"><h3>最大 load imbalance</h3><strong id="peakImbalance">-</strong><span id="peakImbalanceWorkload">-</span></article>
+          <article class="panel metric-card"><h3>Validation</h3><strong id="validationPassed">-</strong><span id="validationIssues">-</span></article>
+        </section>
+
+        <section class="panel status-panel">
+          <div class="panel-head"><h3>状态</h3><span class="mini-tag">当前 output</span></div>
+          <div id="validationStatus" class="status-grid"></div>
+        </section>
+
+        <section class="cards-grid insight-grid">
+          <article class="panel insight-card"><h3>风险摘要</h3><p id="topRiskSummary" class="insight-text">-</p></article>
+          <article class="panel insight-card"><h3>低风险摘要</h3><p id="lowRiskSummary" class="insight-text">-</p></article>
+          <article class="panel insight-card"><h3>调度结论</h3><p id="schedInsight" class="insight-text">-</p></article>
+          <article class="panel insight-card"><h3>负载结论</h3><p id="loadInsight" class="insight-text">-</p></article>
+        </section>
+
+        <section class="viz-grid two-up">
+          <article class="panel"><div class="panel-head"><h3>Sched Gap P95</h3><button class="mini-button" data-download-target="schedChart" data-download-name="sched_gap_p95">下载 SVG</button></div><div id="schedChart" class="plot"></div></article>
+          <article class="panel"><div class="panel-head"><h3>Load Imbalance</h3><button class="mini-button" data-download-target="loadChart" data-download-name="load_imbalance">下载 SVG</button></div><div id="loadChart" class="plot"></div></article>
+        </section>
+
+        <section class="viz-grid two-up">
+          <article class="panel"><div class="panel-head"><h3>Sched Event Ratio</h3><button class="mini-button" data-download-target="schedEventChart" data-download-name="sched_event_ratio">下载 SVG</button></div><div id="schedEventChart" class="plot"></div></article>
+          <article class="panel"><div class="panel-head"><h3>Risk Ranking</h3><button class="mini-button" data-download-target="rankingChart" data-download-name="risk_ranking">下载 SVG</button></div><div id="rankingChart" class="plot"></div></article>
+        </section>
+
+        <section class="viz-grid two-up">
+          <article class="panel"><div class="panel-head"><h3>Jain Fairness</h3><button class="mini-button" data-download-target="fairnessChart" data-download-name="jain_fairness">下载 SVG</button></div><div id="fairnessChart" class="plot"></div></article>
+          <article class="panel"><div class="panel-head"><h3>Risk Scatter</h3><button class="mini-button" data-download-target="riskScatterChart" data-download-name="risk_scatter">下载 SVG</button></div><div id="riskScatterChart" class="plot"></div></article>
+        </section>
+
+        <section class="viz-grid two-up">
+          <article class="panel"><div class="panel-head"><h3>分布图</h3><button class="mini-button" data-download-target="distributionChart" data-download-name="distribution_chart">下载 SVG</button></div><div id="distributionChart" class="plot"></div></article>
+          <article class="panel">
+            <div class="panel-head">
+              <h3>SM Heatmap</h3>
+              <div class="panel-tools">
+                <select id="heatmapWorkload"></select>
+                <select id="heatmapBatch"></select>
+                <select id="heatmapMetric">
+                  <option value="block_count">block_count</option>
+                  <option value="elapsed_sum">elapsed_sum</option>
+                </select>
+                <button class="mini-button" data-download-target="heatmapChart" data-download-name="sm_heatmap">下载 SVG</button>
+              </div>
+            </div>
+            <div id="heatmapChart" class="plot"></div>
+          </article>
+        </section>
+
+        <section class="viz-grid two-up">
+          <article class="panel">
+            <div class="panel-head"><h3>结构化结论</h3><span class="mini-tag">摘要卡片</span></div>
+            <div id="reportCards" class="report-cards"></div>
+            <details class="report-details">
+              <summary>查看原始 JSON</summary>
+              <pre id="reportView" class="report-view"></pre>
+            </details>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><h3>筛选结果联表</h3><span class="mini-tag">sched 主指标，load 辅助指标</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead id="summaryHead"></thead>
+                <tbody id="summaryBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h3>Chart 目录静态图总览</h3><span id="galleryMeta" class="mini-tag">-</span></div>
+          <div id="galleryRoot" class="gallery-root"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+  </html>

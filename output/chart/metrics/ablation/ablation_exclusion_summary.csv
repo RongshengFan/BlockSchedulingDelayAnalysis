@@ -1,0 +1,6 @@
+scenario,excluded,valid,reason,top_workload,top_score,avg_score,n_workloads
+exclude_compute,compute,True,,memory,14.0,10.0,4
+exclude_memory,memory,True,,mixed,14.0,10.0,4
+exclude_mixed,mixed,True,,memory,14.0,10.0,4
+exclude_sparse,sparse,True,,memory,13.0,10.0,4
+exclude_vgg16,vgg16,True,,memory,14.0,10.0,4

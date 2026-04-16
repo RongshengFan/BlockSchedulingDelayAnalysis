@@ -1,0 +1,15 @@
+# RSFAN pipeline config (defaults)
+# Use with:
+#   python analysis/cli.py all --config configs/pipeline.default.toml
+
+python = "/home/lichaoqun/anaconda3/envs/venv/bin/python"
+output_data_dir = "../output/data"
+chart_dir = "../output/chart"
+exclude_workloads = []
+min_sms = 1
+
+[collect]
+iters = 8
+iters_vgg16 = 1
+batches = [8, 16, 32, 64]
+workloads = ["compute", "memory", "mixed", "sparse", "vgg16"]

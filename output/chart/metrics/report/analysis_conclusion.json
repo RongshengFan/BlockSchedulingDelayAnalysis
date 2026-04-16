@@ -1,0 +1,329 @@
+{
+  "validation": {
+    "rows": 626944,
+    "workloads": [
+      "compute",
+      "memory",
+      "mixed",
+      "sparse",
+      "vgg16"
+    ],
+    "batches": [
+      16,
+      32,
+      64,
+      128
+    ],
+    "issue_counts": {
+      "error": 0,
+      "warning": 0,
+      "info": 0
+    },
+    "total_issues": 0,
+    "passed": true
+  },
+  "metric_definitions": {
+    "sched": "sched denotes the Neutrino-style scheduling gap on the same SM: the actual start time of a newly dispatched block minus the actual end time of the previous block observed on that SM.",
+    "launch_offset": "launch_offset is a relative start offset measured from the earliest block start timestamp in the same traced kernel run. It is not the true ready-to-run wait time.",
+    "core_sched_metric": "Core scheduling summary is based on Neutrino-style dispatch-gap statistics. For blocks observed on the same SM, the sched gap is defined as the actual start time of the next block minus the actual end time of the previous block."
+  },
+  "ranking_method": {
+    "method": "equal_weight_rank_sum",
+    "aggregation_level": "per-workload mean over retained batches",
+    "core_sched_metric": "dispatch_gap_p95_cycles",
+    "dimensions": [
+      {
+        "name": "sched",
+        "column": "core_sched_p95_mean",
+        "direction": "higher_worse"
+      },
+      {
+        "name": "imbalance",
+        "column": "imbalance_mean",
+        "direction": "higher_worse"
+      },
+      {
+        "name": "elapsed_cv",
+        "column": "elapsed_cv_mean",
+        "direction": "higher_worse"
+      },
+      {
+        "name": "fairness",
+        "column": "jain_mean",
+        "direction": "lower_worse"
+      }
+    ],
+    "score_definition": "overall_risk_score = rank_sched + rank_imbalance + rank_cv + rank_fairness_bad",
+    "explanation": "A rank-sum is used instead of directly combining raw values, because the four dimensions have different units and scales. Each dimension is equally weighted.",
+    "excluded_batches": [
+      8
+    ],
+    "note": "This score is a comparative workload summary for analysis/dashboard use, not a physical hardware metric."
+  },
+  "correlation_summary": {
+    "core_metric": "dispatch_gap_p95_cycles",
+    "merged_rows": 20,
+    "pairwise": [
+      {
+        "label": "dispatch_gap_p95_cycles vs block_imbalance_ratio",
+        "x": "dispatch_gap_p95_cycles",
+        "y": "block_imbalance_ratio",
+        "count": 20,
+        "pearson": -0.08828982119870292,
+        "spearman": -0.08361596748493874,
+        "interpretation": "very weak negative correlation"
+      },
+      {
+        "label": "dispatch_gap_p95_cycles vs elapsed_sum_cv",
+        "x": "dispatch_gap_p95_cycles",
+        "y": "elapsed_sum_cv",
+        "count": 20,
+        "pearson": -0.14133655517828073,
+        "spearman": -0.03609022556390977,
+        "interpretation": "very weak negative correlation"
+      },
+      {
+        "label": "dispatch_gap_p95_cycles vs jain_block_fairness",
+        "x": "dispatch_gap_p95_cycles",
+        "y": "jain_block_fairness",
+        "count": 20,
+        "pearson": 0.09796594536291435,
+        "spearman": 0.02409641286882454,
+        "interpretation": "very weak positive correlation"
+      },
+      {
+        "label": "sched_event_ratio vs block_imbalance_ratio",
+        "x": "sched_event_ratio",
+        "y": "block_imbalance_ratio",
+        "count": 20,
+        "pearson": -0.8096342222176327,
+        "spearman": -0.7109908924595758,
+        "interpretation": "strong negative correlation"
+      },
+      {
+        "label": "sched_event_ratio vs elapsed_sum_cv",
+        "x": "sched_event_ratio",
+        "y": "elapsed_sum_cv",
+        "count": 20,
+        "pearson": -0.8040157459549436,
+        "spearman": -0.7945689507106932,
+        "interpretation": "strong negative correlation"
+      },
+      {
+        "label": "sched_event_ratio vs jain_block_fairness",
+        "x": "sched_event_ratio",
+        "y": "jain_block_fairness",
+        "count": 20,
+        "pearson": 0.7652749239787482,
+        "spearman": 0.7137600224725599,
+        "interpretation": "strong positive correlation"
+      }
+    ]
+  },
+  "sched_findings": [
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 16,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 13378.2,
+      "detail": "batch=16 highest dispatch gap p95 workload is mixed (p95=13378.2000)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 32,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 28343.149999999983,
+      "detail": "batch=32 highest dispatch gap p95 workload is mixed (p95=28343.1500)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 64,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 20722.249999999993,
+      "detail": "batch=64 highest dispatch gap p95 workload is mixed (p95=20722.2500)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 128,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 16106.0,
+      "detail": "batch=128 highest dispatch gap p95 workload is mixed (p95=16106.0000)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": null,
+      "severity": "high",
+      "metric": "core_sched_p95_mean",
+      "value": 19637.399999999994,
+      "detail": "overall highest mean dispatch-gap p95 scheduling delay workload is mixed (value=19637.4000)"
+    },
+    {
+      "category": "sched",
+      "workload": "sparse",
+      "batch": null,
+      "severity": "info",
+      "metric": "core_sched_p95_mean",
+      "value": 1035.5499999999993,
+      "detail": "overall lowest mean dispatch-gap p95 scheduling delay workload is sparse (value=1035.5500)"
+    }
+  ],
+  "delay_findings": [
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 16,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 13378.2,
+      "detail": "batch=16 highest dispatch gap p95 workload is mixed (p95=13378.2000)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 32,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 28343.149999999983,
+      "detail": "batch=32 highest dispatch gap p95 workload is mixed (p95=28343.1500)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 64,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 20722.249999999993,
+      "detail": "batch=64 highest dispatch gap p95 workload is mixed (p95=20722.2500)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": 128,
+      "severity": "high",
+      "metric": "dispatch_gap_p95_cycles",
+      "value": 16106.0,
+      "detail": "batch=128 highest dispatch gap p95 workload is mixed (p95=16106.0000)"
+    },
+    {
+      "category": "sched",
+      "workload": "mixed",
+      "batch": null,
+      "severity": "high",
+      "metric": "core_sched_p95_mean",
+      "value": 19637.399999999994,
+      "detail": "overall highest mean dispatch-gap p95 scheduling delay workload is mixed (value=19637.4000)"
+    },
+    {
+      "category": "sched",
+      "workload": "sparse",
+      "batch": null,
+      "severity": "info",
+      "metric": "core_sched_p95_mean",
+      "value": 1035.5499999999993,
+      "detail": "overall lowest mean dispatch-gap p95 scheduling delay workload is sparse (value=1035.5500)"
+    }
+  ],
+  "load_findings": [
+    {
+      "category": "load",
+      "workload": "memory",
+      "batch": null,
+      "severity": "high",
+      "metric": "block_imbalance_ratio_mean",
+      "value": 0.24072265625,
+      "detail": "highest average block imbalance ratio workload is memory (value=0.2407)"
+    },
+    {
+      "category": "load",
+      "workload": "vgg16",
+      "batch": null,
+      "severity": "info",
+      "metric": "block_imbalance_ratio_mean",
+      "value": 0.07916666666666662,
+      "detail": "lowest average block imbalance ratio workload is vgg16 (value=0.0792)"
+    },
+    {
+      "category": "load",
+      "workload": "compute",
+      "batch": null,
+      "severity": "high",
+      "metric": "jain_block_fairness_mean",
+      "value": 0.9963018641010223,
+      "detail": "lowest average Jain fairness workload is compute (value=0.9963)"
+    },
+    {
+      "category": "load",
+      "workload": "memory",
+      "batch": 16,
+      "severity": "medium",
+      "metric": "block_imbalance_ratio",
+      "value": 0.484375,
+      "detail": "batch=16 largest imbalance observed on memory (ratio=0.4844)"
+    },
+    {
+      "category": "load",
+      "workload": "memory",
+      "batch": 32,
+      "severity": "medium",
+      "metric": "block_imbalance_ratio",
+      "value": 0.21875,
+      "detail": "batch=32 largest imbalance observed on memory (ratio=0.2188)"
+    },
+    {
+      "category": "load",
+      "workload": "memory",
+      "batch": 64,
+      "severity": "medium",
+      "metric": "block_imbalance_ratio",
+      "value": 0.1484375,
+      "detail": "batch=64 largest imbalance observed on memory (ratio=0.1484)"
+    },
+    {
+      "category": "load",
+      "workload": "memory",
+      "batch": 128,
+      "severity": "medium",
+      "metric": "block_imbalance_ratio",
+      "value": 0.111328125,
+      "detail": "batch=128 largest imbalance observed on memory (ratio=0.1113)"
+    }
+  ],
+  "top_risk_workload": {
+    "workload": "memory",
+    "core_sched_p95_mean": 2041.099999999998,
+    "imbalance_mean": 0.24072265625,
+    "elapsed_cv_mean": 0.05034737824806763,
+    "jain_mean": 0.9965134200528837,
+    "rank_sched": 3.0,
+    "rank_imbalance": 5.0,
+    "rank_cv": 5.0,
+    "rank_fairness_bad": 4.0,
+    "overall_risk_score": 17.0,
+    "delay_p95_mean": 2041.099999999998,
+    "rank_delay": 3.0
+  },
+  "lowest_risk_workload": {
+    "workload": "vgg16",
+    "core_sched_p95_mean": 7431.399999999999,
+    "imbalance_mean": 0.07916666666666662,
+    "elapsed_cv_mean": 0.023978045965988827,
+    "jain_mean": 0.9994472183566542,
+    "rank_sched": 4.0,
+    "rank_imbalance": 1.0,
+    "rank_cv": 2.0,
+    "rank_fairness_bad": 1.0,
+    "overall_risk_score": 8.0,
+    "delay_p95_mean": 7431.399999999999,
+    "rank_delay": 4.0
+  },
+  "n_workloads": 5
+}

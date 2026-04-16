@@ -1,0 +1,24 @@
+{
+  "rows": 626944,
+  "workloads": [
+    "compute",
+    "memory",
+    "mixed",
+    "sparse",
+    "vgg16"
+  ],
+  "batches": [
+    8,
+    16,
+    32,
+    64,
+    128
+  ],
+  "issue_counts": {
+    "error": 0,
+    "warning": 0,
+    "info": 0
+  },
+  "total_issues": 0,
+  "passed": true
+}
