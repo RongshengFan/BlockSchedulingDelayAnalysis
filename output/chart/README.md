@@ -45,7 +45,7 @@ $$
 \mathrm{Sched}_i = 0
 $$
 
-其中，$s_i$ 表示当前 block 的 `start_clock`，$e_j$ 表示其被替换前驱 block 的 `end_clock`。`Sched` 对应论文中的核心调度指标，用于刻画同一 SM 上 block replacement 过程中产生的等待周期。该指标不是 host 侧 launch offset，也不是硬件直接暴露的 scheduler counter，而是根据 `(start_clock, elapsed, sm)` 重建得到的估计量。
+其中， $s_i$ 表示当前 block 的 `start_clock`， $e_j$ 表示其被替换前驱 block 的 `end_clock`。`Sched` 对应论文中的核心调度指标，用于刻画同一 SM 上 block replacement 过程中产生的等待周期。该指标不是 host 侧 launch offset，也不是硬件直接暴露的 scheduler counter，而是根据 `(start_clock, elapsed, sm)` 重建得到的估计量。
 
 与 `Sched` 相关的主要聚合指标如下：
 
