@@ -23,9 +23,17 @@
 
 `cli`、`scenario_runner`、`validators`、`reporting` 等脚本属于辅助层，用于批量执行、结果整理或额外检查，不构成主分析链路。
 
+下图展示工具链从原始 trace 采集到结构化结果展示的主数据流转过程。
+
+![GPU Block 调度延迟分析工具总体流程图](output/chart/overview/project_architecture.svg)
+
 ## 系统架构
 
-从工程实现角度看，项目可以拆成六个层次：
+从工程实现角度看，系统可划分为六个层次：
+
+下图展示系统的整体分层组织关系及支撑模块与主链路之间的对应关系。
+
+![GPU Block 调度延迟分析工具系统架构图](output/chart/overview/system_architecture_layers.svg)
 
 1. `采集定义层`
    `probe/` 负责定义 Neutrino 探针，决定 block 级 trace 记录哪些字段。
