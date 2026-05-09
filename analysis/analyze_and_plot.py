@@ -16,20 +16,24 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
 from matplotlib.lines import Line2D
 
+matplotlib.use("Agg")
+
 BASE_DIR = Path(__file__).resolve().parent
 WORKLOAD_ORDER = ["compute", "memory", "mixed", "sparse", "vgg16"]
+BATCH_TICKS = [16, 32, 64, 128]
 WORKLOAD_PALETTE = {
     "compute": "#2a7afb",
     "memory": "#2ab0bc",
-    "mixed": "#ffc401",
+    "mixed": "#d19a00",
     "sparse": "#014415",
-    "vgg16": "#f91625",
+    "vgg16": "#d62728",
 }
 WORKLOAD_MARKERS = {
     "compute": "o",
@@ -53,19 +57,53 @@ def ordered_workloads(values: list[str]) -> list[str]:
     return known + extra
 
 
-def place_legend(ax, ncol: int = 2) -> None:
+def setup_style() -> None:
+    sns.set_theme(style="whitegrid", context="paper", rc={"font.family": "Times New Roman"})
+    plt.rcParams.update(
+        {
+            "font.family": "Times New Roman",
+            "font.size": 11,
+            "axes.labelsize": 12,
+            "axes.titlesize": 12,
+            "xtick.labelsize": 10.5,
+            "ytick.labelsize": 10.5,
+            "legend.fontsize": 10,
+            "figure.dpi": 120,
+            "savefig.dpi": 300,
+            "axes.linewidth": 1.0,
+            "lines.linewidth": 1.8,
+            "patch.linewidth": 0.8,
+            "grid.linewidth": 0.6,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def apply_batch_ticks(ax: plt.Axes, *, axis: str = "x", order: list[int] | None = None) -> None:
+    ticks = order or BATCH_TICKS
+    if axis == "x":
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([str(tick) for tick in ticks])
+    else:
+        ax.set_yticks(ticks)
+        ax.set_yticklabels([str(tick) for tick in ticks])
+
+
+def place_legend(ax, ncol: int = 2, *, loc: str = "best", bbox_to_anchor=None) -> None:
     handles, labels = ax.get_legend_handles_labels()
     if not handles:
         return
     ax.legend(
         handles,
         labels,
-        loc="best",
+        loc=loc,
         ncol=ncol,
+        bbox_to_anchor=bbox_to_anchor,
         frameon=True,
-        framealpha=0.88,
+        framealpha=0.95,
         facecolor="white",
-        edgecolor="#d9d9d9",
+        edgecolor="#d0d0d0",
     )
 
 
@@ -78,9 +116,12 @@ def plot_metric_lines(
     ylabel: str,
     order: list[int],
     yscale: str | None = None,
+    legend_loc: str = "best",
+    legend_ncol: int = 2,
+    legend_bbox=None,
 ) -> None:
     workloads = ordered_workloads(sorted(data["workload"].dropna().unique().tolist()))
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(6.2, 3.9))
     for workload in workloads:
         sub = data[data["workload"] == workload].sort_values(x)
         if sub.empty:
@@ -92,22 +133,20 @@ def plot_metric_lines(
             color=WORKLOAD_PALETTE.get(workload, None),
             marker=WORKLOAD_MARKERS.get(workload, "o"),
             linestyle=WORKLOAD_LINESTYLES.get(workload, "-"),
-            linewidth=2.2,
-            markersize=7,
+            linewidth=1.8,
+            markersize=4.8,
             markeredgecolor="white",
-            markeredgewidth=0.8,
+            markeredgewidth=0.5,
         )
-    ax.set_title(title)
-    ax.set_xlabel("Batch")
+    ax.set_xlabel("Batch Size")
     ax.set_ylabel(ylabel)
-    ax.set_xticks(order)
-    ax.set_xticklabels([str(xv) for xv in order])
+    apply_batch_ticks(ax, order=order)
     if yscale:
         ax.set_yscale(yscale)
     ax.grid(alpha=0.25)
-    place_legend(ax, ncol=2)
+    place_legend(ax, ncol=legend_ncol, loc=legend_loc, bbox_to_anchor=legend_bbox)
     fig.tight_layout()
-    fig.savefig(out_path, dpi=180)
+    fig.savefig(out_path, dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close(fig)
 
 
@@ -233,7 +272,7 @@ def plot_grouped_bars(
     x = np.arange(len(order), dtype=float)
     width = 0.13 if len(workloads) >= 5 else 0.16
 
-    fig, ax = plt.subplots(figsize=(10.5, 6.2))
+    fig, ax = plt.subplots(figsize=(6.4, 3.9))
     for idx, workload in enumerate(workloads):
         sub = data[data["workload"] == workload].sort_values("batch")
         vals = []
@@ -248,21 +287,20 @@ def plot_grouped_bars(
             label=workload,
             color=WORKLOAD_PALETTE.get(workload, None),
             edgecolor="white",
-            linewidth=0.8,
-            alpha=0.92,
+            linewidth=0.4,
+            alpha=1.0,
         )
 
-    ax.set_title(title)
-    ax.set_xlabel("Batch")
+    ax.set_xlabel("Batch Size")
     ax.set_ylabel(ylabel)
     ax.set_xticks(x)
     ax.set_xticklabels([str(v) for v in order])
     if ylim is not None:
         ax.set_ylim(*ylim)
     ax.grid(axis="y", alpha=0.25)
-    place_legend(ax, ncol=2)
+    place_legend(ax, ncol=3)
     fig.tight_layout()
-    fig.savefig(out_path, dpi=180)
+    fig.savefig(out_path, dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close(fig)
 
 
@@ -379,11 +417,7 @@ def plot_sched(sched_detail: pd.DataFrame, sched_summary: pd.DataFrame, out_dir:
     if sched_plot.empty:
         sched_plot = sched_summary.copy()
 
-    order = sorted(sched_plot["batch"].dropna().unique().tolist())
-
-    def _apply_batch_ticks(ax) -> None:
-        ax.set_xticks(order)
-        ax.set_xticklabels([str(x) for x in order])
+    order = [batch for batch in BATCH_TICKS if batch in set(sched_plot["batch"].dropna().astype(int).tolist())]
 
     plot_metric_lines(
         sched_plot,
@@ -393,6 +427,9 @@ def plot_sched(sched_detail: pd.DataFrame, sched_summary: pd.DataFrame, out_dir:
         title="Sched Mean by Batch (16-128)",
         ylabel="Sched Mean (cycles)",
         order=order,
+        legend_loc="center right",
+        legend_ncol=2,
+        legend_bbox=(0.98, 0.68),
     )
 
     plot_metric_lines(
@@ -431,35 +468,52 @@ def plot_sched(sched_detail: pd.DataFrame, sched_summary: pd.DataFrame, out_dir:
         .reindex(columns=order)
         .fillna(0)
     )
-    plt.figure(figsize=(10, 5))
-    sns.heatmap(p95_pivot, cmap="YlOrRd", annot=True, fmt=".2f")
-    plt.title("Sched P95 Heatmap (Workload x Batch, 16-128)")
-    plt.xlabel("Batch")
-    plt.ylabel("Workload")
-    plt.tight_layout()
-    plt.savefig(out_dir / "05_sched_p95_heatmap_workload_batch.png", dpi=180)
-    plt.close()
+    fig, ax = plt.subplots(figsize=(6.3, 3.5))
+    sns.heatmap(
+        p95_pivot,
+        cmap="YlOrRd",
+        annot=True,
+        fmt=".2f",
+        linewidths=0.25,
+        linecolor="white",
+        cbar_kws={"label": "P95 Sched (cycles)"},
+        ax=ax,
+    )
+    ax.set_xlabel("Batch Size")
+    ax.set_ylabel("Workload")
+    ax.set_xticklabels([str(batch) for batch in order], rotation=0)
+    ax.set_yticklabels(ax.get_yticklabels(), rotation=0)
+    fig.tight_layout()
+    fig.savefig(out_dir / "05_sched_p95_heatmap_workload_batch.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
+    plt.close(fig)
 
     cdf = sched_detail[sched_detail["sched"] > 0][["workload", "sched"]].dropna().copy()
     if len(cdf) > 250_000:
         cdf = cdf.sample(n=250_000, random_state=42)
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6.2, 3.9))
     if cdf.empty:
         plt.text(0.5, 0.5, "No non-zero sched events", ha="center", va="center")
         plt.xlim(0, 1)
         plt.ylim(0, 1)
     else:
-        sns.ecdfplot(data=cdf, x="sched", hue="workload")
-    plt.title("Sched Empirical CDF by Workload")
+        sns.ecdfplot(
+            data=cdf,
+            x="sched",
+            hue="workload",
+            palette=WORKLOAD_PALETTE,
+            hue_order=ordered_workloads(sorted(cdf["workload"].dropna().unique().tolist())),
+        )
+        x_cap = 50_000 if float(cdf["sched"].quantile(0.999)) <= 50_000 else 100_000
+        plt.xlim(0, min(x_cap, float(cdf["sched"].max()) * 1.02))
     plt.xlabel("Sched (cycles)")
     plt.ylabel("ECDF")
     plt.tight_layout()
-    plt.savefig(out_dir / "06_sched_ecdf_by_workload.png", dpi=180)
+    plt.savefig(out_dir / "06_sched_ecdf_by_workload.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close()
 
     quantile_plot = sched_plot[["workload", "batch", "sched_p50", "sched_p95", "sched_p99"]].copy()
     workloads = sorted(quantile_plot["workload"].dropna().unique().tolist())
-    fig, axes = plt.subplots(len(workloads), 1, figsize=(9, 2.7 * len(workloads)), sharex=True)
+    fig, axes = plt.subplots(len(workloads), 1, figsize=(6.2, 1.55 * len(workloads)), sharex=True)
     if len(workloads) == 1:
         axes = [axes]
     for ax, workload in zip(axes, ordered_workloads(workloads)):
@@ -469,15 +523,13 @@ def plot_sched(sched_detail: pd.DataFrame, sched_summary: pd.DataFrame, out_dir:
         ax.plot(sub["batch"], sub["sched_p99"], marker="o", linewidth=2.0, color="#d62728", label="P99")
         ax.fill_between(sub["batch"], sub["sched_p50"], sub["sched_p95"], alpha=0.12, color="#ffbe7d")
         ax.fill_between(sub["batch"], sub["sched_p95"], sub["sched_p99"], alpha=0.10, color="#f28e8c")
-        ax.set_title(f"{workload} Sched Quantile Ladder")
-        ax.set_ylabel("Sched (cycles)")
-        _apply_batch_ticks(ax)
+        ax.set_ylabel(workload)
+        apply_batch_ticks(ax, order=order)
         ax.grid(alpha=0.25)
     place_legend(axes[0], ncol=3)
-    axes[-1].set_xlabel("Batch")
-    fig.suptitle("Sched Quantile Trends by Workload (16-128)", y=0.995)
+    axes[-1].set_xlabel("Batch Size")
     fig.tight_layout()
-    fig.savefig(out_dir / "07_sched_quantile_ladders_by_workload.png", dpi=180)
+    fig.savefig(out_dir / "07_sched_quantile_ladders_by_workload.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close(fig)
 
     plot_grouped_bars(
@@ -508,11 +560,7 @@ def plot_load(per_sm: pd.DataFrame, load_summary: pd.DataFrame, out_dir: Path) -
     if per_sm_plot.empty:
         per_sm_plot = per_sm.copy()
 
-    order = sorted(load_plot["batch"].dropna().unique().tolist())
-
-    def _apply_batch_ticks(ax) -> None:
-        ax.set_xticks(order)
-        ax.set_xticklabels([str(x) for x in order])
+    order = [batch for batch in BATCH_TICKS if batch in set(load_plot["batch"].dropna().astype(int).tolist())]
 
     plot_metric_lines(
         load_plot,
@@ -549,23 +597,37 @@ def plot_load(per_sm: pd.DataFrame, load_summary: pd.DataFrame, out_dir: Path) -
         pivot_blocks = sub.pivot_table(index="batch", columns="sm", values="block_count", aggfunc="sum", fill_value=0)
         pivot_elapsed = sub.pivot_table(index="batch", columns="sm", values="elapsed_sum", aggfunc="sum", fill_value=0)
 
-        plt.figure(figsize=(12, 5))
-        sns.heatmap(pivot_blocks, cmap="YlGnBu")
-        plt.title(f"SM Block Count Heatmap - {workload}")
-        plt.xlabel("SM")
-        plt.ylabel("Batch")
-        plt.tight_layout()
-        plt.savefig(out_dir / f"04_sm_block_heatmap_{workload}.png", dpi=180)
-        plt.close()
+        fig, ax = plt.subplots(figsize=(6.3, 3.5))
+        sns.heatmap(
+            pivot_blocks,
+            cmap="YlGnBu",
+            linewidths=0.25,
+            linecolor="white",
+            cbar_kws={"label": "Block Count"},
+            ax=ax,
+        )
+        ax.set_xlabel("SM ID")
+        ax.set_ylabel("Batch Size")
+        ax.set_yticklabels([str(batch) for batch in order], rotation=0)
+        fig.tight_layout()
+        fig.savefig(out_dir / f"04_sm_block_heatmap_{workload}.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
+        plt.close(fig)
 
-        plt.figure(figsize=(12, 5))
-        sns.heatmap(pivot_elapsed, cmap="OrRd")
-        plt.title(f"SM Elapsed Sum Heatmap - {workload}")
-        plt.xlabel("SM")
-        plt.ylabel("Batch")
-        plt.tight_layout()
-        plt.savefig(out_dir / f"05_sm_elapsed_heatmap_{workload}.png", dpi=180)
-        plt.close()
+        fig, ax = plt.subplots(figsize=(6.3, 3.5))
+        sns.heatmap(
+            pivot_elapsed,
+            cmap="OrRd",
+            linewidths=0.25,
+            linecolor="white",
+            cbar_kws={"label": "Elapsed Sum (cycles)"},
+            ax=ax,
+        )
+        ax.set_xlabel("SM ID")
+        ax.set_ylabel("Batch Size")
+        ax.set_yticklabels([str(batch) for batch in order], rotation=0)
+        fig.tight_layout()
+        fig.savefig(out_dir / f"05_sm_elapsed_heatmap_{workload}.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
+        plt.close(fig)
 
     plot_grouped_bars(
         load_plot,
@@ -591,7 +653,7 @@ def plot_overview(df: pd.DataFrame, out_dir: Path) -> None:
     if overview_df.empty:
         overview_df = df.copy()
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(6.2, 3.9))
     sns.histplot(
         data=overview_df,
         x="elapsed",
@@ -603,12 +665,11 @@ def plot_overview(df: pd.DataFrame, out_dir: Path) -> None:
         palette=WORKLOAD_PALETTE,
         hue_order=ordered_workloads(sorted(overview_df["workload"].dropna().unique().tolist())),
     )
-    plt.title("Elapsed Distribution by Workload (16-128)")
-    plt.xlabel("Elapsed")
+    plt.xlabel("Elapsed (cycles)")
     plt.ylabel("Density")
     place_legend(plt.gca(), ncol=2)
     plt.tight_layout()
-    plt.savefig(out_dir / "01_elapsed_distribution_by_workload.png", dpi=180)
+    plt.savefig(out_dir / "01_elapsed_distribution_by_workload.png", dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close()
 
     elapsed_summary = (
@@ -616,7 +677,7 @@ def plot_overview(df: pd.DataFrame, out_dir: Path) -> None:
         .agg(elapsed_mean=("elapsed", "mean"))
         .sort_values(["workload", "batch"])
     )
-    order = sorted(elapsed_summary["batch"].dropna().unique().tolist())
+    order = [batch for batch in BATCH_TICKS if batch in set(elapsed_summary["batch"].dropna().astype(int).tolist())]
     plot_grouped_bars(
         elapsed_summary,
         y="elapsed_mean",
@@ -655,7 +716,7 @@ def _plot_relation_panel(
     ]
 
     workloads = ordered_workloads(sorted(corr_plot["workload"].dropna().unique().tolist()))
-    fig, axes = plt.subplots(1, len(metrics), figsize=(18.8, 7.4), sharey=True)
+    fig, axes = plt.subplots(1, len(metrics), figsize=(18.8, 8.6), sharey=True)
     pending_annotations: list[tuple[plt.Axes, list[tuple[float, float, int, str, str]]]] = []
 
     for ax, (x_col, xlabel, title) in zip(axes, metrics):
@@ -671,8 +732,8 @@ def _plot_relation_panel(
                 coeffs[0] * xs + coeffs[1],
                 color="#7f7f7f",
                 linestyle="--",
-                linewidth=1.4,
-                alpha=0.85,
+                linewidth=1.0,
+                alpha=0.58,
             )
 
         for workload in workloads:
@@ -692,9 +753,9 @@ def _plot_relation_panel(
                 label=workload,
                 color=WORKLOAD_PALETTE.get(workload, None),
                 marker=WORKLOAD_MARKERS.get(workload, "o"),
-                s=64,
+                s=56,
                 edgecolor="white",
-                linewidth=0.8,
+                linewidth=0.7,
                 alpha=0.95,
             )
             for _, row in sub.iterrows():
@@ -712,7 +773,7 @@ def _plot_relation_panel(
         pearson = float(corr_matrix.iloc[0, 1]) if corr_matrix.shape == (2, 2) else float("nan")
         rank_matrix = corr_plot[[x_col, y_col]].corr(method="spearman")
         spearman = float(rank_matrix.iloc[0, 1]) if rank_matrix.shape == (2, 2) else float("nan")
-        ax.set_title(f"{title}\nPearson={pearson:.2f}, Spearman={spearman:.2f}", pad=12, fontsize=12.8)
+        ax.set_title(f"{title}\nr={pearson:.2f}, rho={spearman:.2f}", pad=10, fontsize=12.0)
         ax.set_xlabel(xlabel, fontsize=11.8)
         ax.grid(alpha=0.25)
         ax.tick_params(axis="both", labelsize=10.9)
@@ -727,7 +788,7 @@ def _plot_relation_panel(
                 fig,
                 ax,
                 axis_annotations,
-                fontsize=9.2,
+                fontsize=8.6,
                 candidates=[
                     (-20, 8),
                     (-24, -4),
@@ -749,7 +810,19 @@ def _plot_relation_panel(
                 sort_key=lambda spec: (-spec[0], spec[1]),
             )
         else:
-            place_relation_annotations(fig, ax, axis_annotations, fontsize=9.2)
+            place_relation_annotations(fig, ax, axis_annotations, fontsize=8.6)
+
+    if yscale:
+        positive = corr_plot.loc[corr_plot[y_col] > 0, y_col]
+        if not positive.empty:
+            y_min = float(positive.min()) * 0.88
+            y_max = float(positive.max()) * 1.38
+            for ax in axes:
+                ax.set_ylim(y_min, y_max)
+    else:
+        y_max = float(corr_plot[y_col].max()) * 1.28
+        for ax in axes:
+            ax.set_ylim(0, y_max)
 
     axes[0].set_ylabel(y_label, fontsize=11.8)
     legend_handles = []
@@ -777,7 +850,8 @@ def _plot_relation_panel(
             [0],
             color="#7f7f7f",
             linestyle="--",
-            linewidth=1.4,
+            linewidth=1.0,
+            alpha=0.58,
             label="correlation trend",
         ),
         Line2D(
@@ -806,9 +880,8 @@ def _plot_relation_panel(
         borderpad=0.28,
         bbox_to_anchor=(0.5, 0.02),
     )
-    fig.suptitle(fig_title, y=0.985, fontsize=15.0)
-    fig.tight_layout(rect=(0.02, 0.12, 0.98, 0.93))
-    fig.savefig(out_path, dpi=180, bbox_inches="tight")
+    fig.tight_layout(rect=(0.02, 0.12, 0.98, 0.98))
+    fig.savefig(out_path, dpi=300, bbox_inches="tight", pad_inches=0.04)
     plt.close(fig)
 
 
@@ -875,6 +948,7 @@ def main() -> None:
         help="workload names excluded from charts and base summaries",
     )
     args = parser.parse_args()
+    setup_style()
 
     data_dir = (BASE_DIR / args.data_dir).resolve() if not Path(args.data_dir).is_absolute() else Path(args.data_dir)
     exclude = {w.strip() for w in args.exclude_workloads if w and w.strip()}
